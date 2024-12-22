@@ -24,6 +24,8 @@ pub trait TypstDiagnostic {
 }
 
 pub trait TypstCodeActions {
+    fn get_table_parameters(&self) -> HashMap<String, String>;
+    fn parse_table_params(&self, content: &str) -> Vec<String>;
     fn calculate_code_actions(
         &self,
         content: &str,
@@ -34,15 +36,15 @@ pub trait TypstCodeActions {
 
 impl TypstInlayHints for Backend {
     fn calculate_inlay_hints(&self, doc: &str) -> Vec<InlayHint> {
-        let mut hints = Vec::new();
+        let mut hints: Vec<InlayHint> = Vec::new();
 
         // Regex to match any word within angle brackets and @word
-        let angle_brackets_re = Regex::new(r"<(\w+)>").unwrap();
-        let at_word_re = Regex::new(r"@(\w+)").unwrap();
+        let angle_brackets_re: Regex = Regex::new(r"<(\w+)>").unwrap();
+        let at_word_re: Regex = Regex::new(r"@(\w+)").unwrap();
 
-        for (line_idx, line) in doc.lines().enumerate() {
+        doc.lines().enumerate().for_each(|(line_idx, line)| {
             // Match words within angle brackets
-            for cap in angle_brackets_re.captures_iter(line) {
+            angle_brackets_re.captures_iter(line).for_each(|cap| {
                 if let Some(matched_word) = cap.get(1) {
                     let start = cap.get(0).unwrap().start();
                     hints.push(InlayHint {
@@ -62,10 +64,10 @@ impl TypstInlayHints for Backend {
                         data: None,
                     });
                 }
-            }
+            });
 
             // Match @word patterns
-            for cap in at_word_re.captures_iter(line) {
+            at_word_re.captures_iter(line).for_each(|cap| {
                 if let Some(matched_word) = cap.get(1) {
                     let start = cap.get(0).unwrap().start();
                     hints.push(InlayHint {
@@ -85,8 +87,8 @@ impl TypstInlayHints for Backend {
                         data: None,
                     });
                 }
-            }
-        }
+            });
+        });
         hints
     }
 }
@@ -312,6 +314,34 @@ impl LanguageServer for Backend {
 }
 
 impl TypstCodeActions for Backend {
+    fn get_table_parameters(&self) -> HashMap<String, String> {
+        let mut params = HashMap::new();
+        params.insert("columns".to_owned(), "auto".to_owned());
+        params.insert("rows".to_owned(), "auto".to_owned());
+        params.insert("gutter".to_owned(), "auto".to_owned());
+        params.insert("column-gutter".to_owned(), "auto".to_owned());
+        params.insert("row-gutter".to_owned(), "auto".to_owned());
+        params.insert("fill".to_owned(), "none".to_owned());
+        params.insert("align".to_owned(), "auto".to_owned());
+        params.insert("stroke".to_owned(), "none".to_owned());
+        params.insert("inset".to_owned(), "relative".to_owned());
+        params
+    }
+
+    /// Parses the content inside `#table(...)` and extracts the parameters already defined.
+    fn parse_table_params(&self, content: &str) -> Vec<String> {
+        // Regular expression to find parameters (e.g., `param:`).
+        let re = Regex::new(r"(\w+(-\w+)?)\s*:").unwrap();
+        let mut existing_params = Vec::new();
+
+        for cap in re.captures_iter(content) {
+            if let Some(param) = cap.get(1) {
+                existing_params.push(param.as_str().to_owned());
+            }
+        }
+        existing_params
+    }
+
     fn calculate_code_actions(
         &self,
         content: &str,
@@ -366,19 +396,100 @@ impl TypstCodeActions for Backend {
                 }
             }
         }
+
+        let mut multiline_table = String::new();
+        let mut in_table_block = false;
+        let mut table_start_line = 0;
+
+        for (line_idx, line) in content.lines().enumerate() {
+            // Handle multi-line `#table(...)` blocks.
+            if line.contains("#table(") {
+                in_table_block = true;
+                table_start_line = line_idx;
+            }
+
+            if in_table_block {
+                multiline_table.push_str(line);
+                multiline_table.push('\n');
+
+                if line.contains(")") {
+                    in_table_block = false;
+
+                    // Extract existing parameters inside `#table(...)`.
+                    let existing_params: Vec<String> = self.parse_table_params(&multiline_table);
+
+                    // Get all default parameters.
+                    let all_params: HashMap<String, String> = self.get_table_parameters();
+
+                    // Generate a separate code action for each missing parameter.
+                    for (param, default_value) in all_params {
+                        if !existing_params.contains(&param) {
+                            let title = format!("Add missing parameter: {}", param);
+
+                            // Create a new parameter string.
+                            let new_param = format!("{}: {},\n  ", param, default_value);
+                            // Prepare the text edit to add the missing parameter.
+                            let edit = TextEdit {
+                                range: Range {
+                                    start: Position {
+                                        line: table_start_line as u32 + 1,
+                                        character: 2,
+                                        // line: table_start_line as u32,
+                                        // character: line.find("#table(").unwrap_or(5) as u32 + 7, // Position after `#table(`.
+                                    },
+                                    end: Position {
+                                        line: table_start_line as u32 + 1,
+                                        character: 2,
+                                        // line: table_start_line as u32,
+                                        // character: line.find("#table(").unwrap_or(0) as u32 + 7,
+                                    },
+                                },
+                                new_text: new_param,
+                            };
+
+                            // Define the workspace edit for the code action.
+                            let workspace_edit = WorkspaceEdit {
+                                changes: Some(HashMap::from([(uri.clone(), vec![edit])])),
+                                document_changes: None,
+                                change_annotations: None,
+                            };
+
+                            // Create the code action for adding the missing parameter.
+                            let code_action = CodeAction {
+                                title,
+                                kind: Some(CodeActionKind::QUICKFIX),
+                                diagnostics: None,
+                                edit: Some(workspace_edit),
+                                command: None,
+                                is_preferred: Some(true),
+                                disabled: None,
+                                data: None,
+                            };
+
+                            // Add the code action to the list.
+                            actions.push(CodeActionOrCommand::CodeAction(code_action));
+                        }
+                    }
+
+                    // Reset the multiline table content for the next block.
+                    multiline_table.clear();
+                }
+            }
+        }
+
         actions
     }
 }
 
 impl TypstDiagnostic for Backend {
     fn check_unclosed_delimiters(&self, content: &str) -> Vec<Diagnostic> {
-        let mut diagnostics = Vec::new();
-        let mut stack = Vec::new();
+        let mut diagnostics: Vec<Diagnostic> = Vec::new();
+        let mut stack: Vec<(&str, &str, usize, usize)> = Vec::new();
         let delimiters = [("(", ")"), ("{", "}"), ("[", "]")];
-        let mut line_offset = 0;
+        let mut line_offset: usize = 0;
 
-        for (line_idx, line) in content.lines().enumerate() {
-            for (char_idx, ch) in line.chars().enumerate() {
+        content.lines().enumerate().for_each(|(line_idx, line)| {
+            line.chars().enumerate().for_each(|(char_idx, ch)| {
                 for &(open, close) in &delimiters {
                     if ch.to_string() == open {
                         stack.push((open, close, line_idx, char_idx));
@@ -410,11 +521,11 @@ impl TypstDiagnostic for Backend {
                         }
                     }
                 }
-            }
+            });
             line_offset += line.len() + 1;
-        }
+        });
 
-        while let Some((open, close, line_idx, char_idx)) = stack.pop() {
+        while let Some((open, _close, line_idx, char_idx)) = stack.pop() {
             diagnostics.push(Diagnostic {
                 range: Range {
                     start: Position {
