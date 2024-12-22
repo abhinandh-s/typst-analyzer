@@ -1,76 +1,32 @@
 use dashmap::DashMap;
-use regex::Regex;
 use serde_json::Value;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
-use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
-use tower_lsp::Client;
-use tower_lsp::LanguageServer;
+use tower_lsp::{Client, LanguageServer};
+use typst_syntax::Source;
+use typst_analyzer_analysis::check_unclosed_delimiters;
 
-use crate::completion::handle::handle_completions;
+use crate::code_actions::handle::TypstCodeActions;
+use crate::completion::handle::TypstCompletion;
+use crate::hints::handle::TypstInlayHints;
 
 #[derive(Debug)]
 pub struct Backend {
     pub client: Client,
     pub document: DashMap<String, String>,
+    pub sources: DashMap<String, Source>,
 }
 
 impl Backend {
-    pub fn calculate_inlay_hints(&self, doc: &str) -> Vec<InlayHint> {
-        let mut hints = Vec::new();
-
-        // Regex to match any word within angle brackets and @word
-        let angle_brackets_re = Regex::new(r"<(\w+)>").unwrap();
-        let at_word_re = Regex::new(r"@(\w+)").unwrap();
-
-        for (line_idx, line) in doc.lines().enumerate() {
-            // Match words within angle brackets
-            for cap in angle_brackets_re.captures_iter(line) {
-                if let Some(matched_word) = cap.get(1) {
-                    let start = cap.get(0).unwrap().start();
-                    hints.push(InlayHint {
-                        position: Position {
-                            line: line_idx as u32,
-                            character: start as u32 + 1,
-                        },
-                        label: InlayHintLabel::String("label".to_owned()),
-                        kind: Some(InlayHintKind::TYPE),
-                        text_edits: None,
-                        tooltip: Some(InlayHintTooltip::String(format!(
-                            "Suggested label for <{}>",
-                            matched_word.as_str()
-                        ))),
-                        padding_left: Some(true),
-                        padding_right: Some(true),
-                        data: None,
-                    });
-                }
+    pub fn position_to_offset(&self, text: &str, position: Position) -> Option<usize> {
+        let mut offset = 0;
+        for (line_idx, line) in text.lines().enumerate() {
+            if line_idx == position.line as usize {
+                return Some(offset + position.character as usize);
             }
-
-            // Match @word patterns
-            for cap in at_word_re.captures_iter(line) {
-                if let Some(matched_word) = cap.get(1) {
-                    let start = cap.get(0).unwrap().start();
-                    hints.push(InlayHint {
-                        position: Position {
-                            line: line_idx as u32,
-                            character: start as u32 + 1,
-                        },
-                        label: InlayHintLabel::String("reference".to_owned()),
-                        kind: Some(InlayHintKind::TYPE),
-                        text_edits: None,
-                        tooltip: Some(InlayHintTooltip::String(format!(
-                            "Reference for @{}",
-                            matched_word.as_str()
-                        ))),
-                        padding_left: Some(true),
-                        padding_right: Some(true),
-                        data: None,
-                    });
-                }
-            }
+            offset += line.len() + 1; // +1 for the newline character
         }
-        hints
+        None
     }
 }
 
@@ -82,6 +38,7 @@ impl LanguageServer for Backend {
             capabilities: ServerCapabilities {
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::INCREMENTAL,
                 )),
@@ -111,6 +68,123 @@ impl LanguageServer for Backend {
     async fn initialized(&self, _: InitializedParams) {
         self.client
             .log_message(MessageType::INFO, "Language Server initialized!")
+            .await;
+    }
+
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let cmp =
+            TypstCompletion::get_completion_items_from_typst(__self, params.text_document_position);
+        Ok(Some(CompletionResponse::Array(
+            cmp, /*handle_completions() */
+        )))
+    }
+
+    async fn hover(&self, _params: HoverParams) -> Result<Option<Hover>> {
+        Ok(Some(Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: "# will this get displayed\nyes it will".to_owned(),
+            }),
+            range: None,
+        }))
+    }
+
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+        let uri = params.text_document.uri.to_string();
+        if let Some(doc) = self.document.get(&uri) {
+            let hints = self.calculate_inlay_hints(&doc);
+            return Ok(Some(hints));
+        }
+        Ok(None)
+    }
+
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        let uri = params.text_document.uri.to_string();
+        self.client
+            .log_message(MessageType::INFO, "Code action requested")
+            .await;
+
+        if let Some(doc) = self.document.get(&uri) {
+            let content = doc.value();
+            let range = params.range;
+
+            let actions = self.calculate_code_actions(content, range, params.text_document.uri);
+
+            if !actions.is_empty() {
+                self.client
+                    .log_message(MessageType::INFO, "Code actions generated")
+                    .await;
+                return Ok(Some(actions));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        let text_document = params.text_document;
+        self.document
+            .insert(text_document.uri.to_string(), text_document.text.clone());
+        let source = Source::detached(text_document.text.clone());
+        self.sources.insert(text_document.uri.to_string(), source);
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!("Opened file: {}", text_document.uri),
+            )
+            .await;
+    }
+
+    async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        let uri = params.text_document.uri.to_string();
+        if let Some(mut doc) = self.document.get_mut(&uri) {
+            for change in params.content_changes {
+                // Apply changes incrementally
+                let mut current_text = doc.value().clone();
+
+                // Apply the text edit
+                if let Some(range) = change.range {
+                    let start = range.start;
+                    let end = range.end;
+
+                    let start_idx = self.position_to_offset(&current_text, start).unwrap_or(0);
+                    let end_idx = self
+                        .position_to_offset(&current_text, end)
+                        .unwrap_or(current_text.len());
+
+                    current_text.replace_range(start_idx..end_idx, &change.text);
+                } else {
+                    // If range is None, replace the whole text
+                    current_text = change.text.clone();
+                }
+
+                *doc.value_mut() = current_text;
+            }
+            if let Some(mut source) = self.sources.get_mut(&uri) {
+                source.replace(doc.value());
+            }
+            // Check for unclosed delimiters
+            let diagnostics = check_unclosed_delimiters(&doc);
+            self.client
+                .publish_diagnostics(params.text_document.uri.clone(), diagnostics, None)
+                .await;
+
+            self.client
+                .log_message(MessageType::INFO, "File changed!")
+                .await;
+        }
+    }
+
+    async fn did_save(&self, _: DidSaveTextDocumentParams) {
+        self.client
+            .log_message(MessageType::INFO, "File saved!")
+            .await;
+    }
+
+    async fn did_close(&self, params: DidCloseTextDocumentParams) {
+        let uri = params.text_document.uri.to_string();
+        self.document.remove(&uri);
+        self.client
+            .log_message(MessageType::INFO, format!("Closed file: {}", uri))
             .await;
     }
 
@@ -156,98 +230,5 @@ impl LanguageServer for Backend {
         }
 
         Ok(None)
-    }
-
-    async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let text_document = params.text_document;
-        self.document
-            .insert(text_document.uri.to_string(), text_document.text);
-        self.client
-            .log_message(
-                MessageType::INFO,
-                format!("Opened file: {}", text_document.uri),
-            )
-            .await;
-    }
-
-    async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        let uri = params.text_document.uri.to_string();
-        if let Some(mut doc) = self.document.get_mut(&uri) {
-            for change in params.content_changes {
-                // Apply changes incrementally
-                let mut current_text = doc.value().clone();
-
-                // Apply the text edit
-                if let Some(range) = change.range {
-                    let start = range.start;
-                    let end = range.end;
-
-                    let start_idx = self.position_to_offset(&current_text, start).unwrap_or(0);
-                    let end_idx = self
-                        .position_to_offset(&current_text, end)
-                        .unwrap_or(current_text.len());
-
-                    current_text.replace_range(start_idx..end_idx, &change.text);
-                } else {
-                    // If range is None, replace the whole text
-                    current_text = change.text.clone();
-                }
-
-                *doc.value_mut() = current_text;
-            }
-            self.client
-                .log_message(MessageType::INFO, "File changed!")
-                .await;
-        }
-    }
-
-    async fn did_save(&self, _: DidSaveTextDocumentParams) {
-        self.client
-            .log_message(MessageType::INFO, "File saved!")
-            .await;
-    }
-
-    async fn did_close(&self, params: DidCloseTextDocumentParams) {
-        let uri = params.text_document.uri.to_string();
-        self.document.remove(&uri);
-        self.client
-            .log_message(MessageType::INFO, format!("Closed file: {}", uri))
-            .await;
-    }
-
-    async fn completion(&self, _: CompletionParams) -> Result<Option<CompletionResponse>> {
-        Ok(Some(CompletionResponse::Array(handle_completions())))
-    }
-
-    async fn hover(&self, _params: HoverParams) -> Result<Option<Hover>> {
-        Ok(Some(Hover {
-            contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value: "# will this get displayed\nyes it will".to_string(),
-            }),
-            range: None,
-        }))
-    }
-
-    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
-        let uri = params.text_document.uri.to_string();
-        if let Some(doc) = self.document.get(&uri) {
-            let hints = self.calculate_inlay_hints(&doc);
-            return Ok(Some(hints));
-        }
-        Ok(None)
-    }
-}
-
-impl Backend {
-    fn position_to_offset(&self, text: &str, position: Position) -> Option<usize> {
-        let mut offset = 0;
-        for (line_idx, line) in text.lines().enumerate() {
-            if line_idx == position.line as usize {
-                return Some(offset + position.character as usize);
-            }
-            offset += line.len() + 1; // +1 for the newline character
-        }
-        None
     }
 }
