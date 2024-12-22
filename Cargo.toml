@@ -1,0 +1,41 @@
+[workspace.package]
+version = "0.1.0"
+license = "GPL-3.0-or-later"
+authors = ["Abhinandh S <abhinandhsuby@proton.me>"]
+description = "A Language server for Typst."
+homepage = "https://github.com/abhi-xyz/typst-analyzer"
+documentation = "https://github.com/abhi-xyz/typst-analyzer"
+keywords = ["lsp"]
+
+[workspace]
+resolver = "2"
+
+members = [
+  "crates/*"
+ ]
+
+[workspace.dependencies]
+tokio = { version = "1.42.0", features = ["full"] }
+anyhow = "1.0.94"
+thiserror = "2.0.7"
+regex = "1.11.1"
+
+[profile.release]
+panic = 'abort'
+codegen-units = 1
+opt-level = 'z'
+lto = true
+debug = "none"
+strip = "symbols"
+debug-assertions = false
+overflow-checks = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_labels = "allow"
+
+[workspace.lints.clippy]
+enum_glob_use = "deny"
+redundant_closure = "deny"
+str_to_string = "deny"
+perf = "deny"
