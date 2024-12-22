@@ -138,7 +138,7 @@ pub fn headers() -> Vec<CompletionItem> {
     header_items
 }
 
-// FIX: every thing below 
+// FIX: every thing below
 fn get_lists(symbol: &str) -> HashMap<String, String> {
     let mut cmp_item = HashMap::new();
     let mut item = symbol.to_owned();
@@ -175,7 +175,11 @@ pub fn bullet_list() -> Vec<CompletionItem> {
                 documentation: Some(tower_lsp::lsp_types::Documentation::MarkupContent(
                     MarkupContent {
                         kind: tower_lsp::lsp_types::MarkupKind::Markdown,
-                        value: format!("{} {}", num, description.to_owned() + "_" + index.to_string().as_str()),
+                        value: format!(
+                            "{} {}",
+                            num,
+                            description.to_owned() + "_" + index.to_string().as_str()
+                        ),
                     },
                 )),
                 insert_text: Some(format!("{} {}", val, snip_num)),

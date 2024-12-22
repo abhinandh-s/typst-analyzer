@@ -7,8 +7,8 @@ use tower_lsp::lsp_types::{
 
 // use self::markup;
 
-pub(crate) mod markup;
 pub mod handle;
+pub(crate) mod markup;
 
 // FIX: update
 fn table() -> HashMap<String, String> {
@@ -83,7 +83,6 @@ fn provide_tables() -> Vec<CompletionItem> {
     }
     table_items
 }
-
 
 // FIX: update
 fn snippets() -> Vec<CompletionItem> {
