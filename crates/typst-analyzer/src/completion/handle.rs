@@ -8,10 +8,6 @@ use super::markup;
 
 pub fn handle_completions() -> Vec<CompletionItem> {
     let mut cmp = Vec::new();
-    // cmp.extend(snippets());
-    // cmp.extend(provide_tables());
-    // cmp.extend(provide_markdown_links());
-    // cmp.extend(provide_images());
     cmp.extend(markup::bold());
     cmp.extend(markup::emphasis());
     cmp.extend(markup::raw_text());
@@ -44,7 +40,7 @@ impl CmpItems<'_> {
             kind: Some(items.kind),
             documentation: Some(Documentation::MarkupContent(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: items.documentation.to_string(),
+                value: items.documentation.to_owned(),
             })),
             insert_text: Some(items.insert_text),
             insert_text_format: Some(InsertTextFormat::SNIPPET),

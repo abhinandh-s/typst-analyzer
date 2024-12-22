@@ -1,11 +1,11 @@
+use std::collections::HashMap;
+
 use dashmap::DashMap;
 use regex::Regex;
 use serde_json::Value;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
-use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
-use tower_lsp::Client;
-use tower_lsp::LanguageServer;
+use tower_lsp::{Client, LanguageServer};
 
 use crate::completion::handle::handle_completions;
 
@@ -15,8 +15,25 @@ pub struct Backend {
     pub document: DashMap<String, String>,
 }
 
-impl Backend {
-    pub fn calculate_inlay_hints(&self, doc: &str) -> Vec<InlayHint> {
+pub trait TypstInlayHints {
+    fn calculate_inlay_hints(&self, doc: &str) -> Vec<InlayHint>;
+}
+
+pub trait TypstDiagnostic {
+    fn check_unclosed_delimiters(&self, content: &str) -> Vec<Diagnostic>;
+}
+
+pub trait TypstCodeActions {
+    fn calculate_code_actions(
+        &self,
+        content: &str,
+        range: Range,
+        uri: Url,
+    ) -> Vec<CodeActionOrCommand>;
+}
+
+impl TypstInlayHints for Backend {
+    fn calculate_inlay_hints(&self, doc: &str) -> Vec<InlayHint> {
         let mut hints = Vec::new();
 
         // Regex to match any word within angle brackets and @word
@@ -74,6 +91,19 @@ impl Backend {
     }
 }
 
+impl Backend {
+    fn position_to_offset(&self, text: &str, position: Position) -> Option<usize> {
+        let mut offset = 0;
+        for (line_idx, line) in text.lines().enumerate() {
+            if line_idx == position.line as usize {
+                return Some(offset + position.character as usize);
+            }
+            offset += line.len() + 1; // +1 for the newline character
+        }
+        None
+    }
+}
+
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
@@ -82,6 +112,7 @@ impl LanguageServer for Backend {
             capabilities: ServerCapabilities {
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::INCREMENTAL,
                 )),
@@ -223,7 +254,7 @@ impl LanguageServer for Backend {
         Ok(Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: "# will this get displayed\nyes it will".to_string(),
+                value: "# will this get displayed\nyes it will".to_owned(),
             }),
             range: None,
         }))
@@ -237,17 +268,98 @@ impl LanguageServer for Backend {
         }
         Ok(None)
     }
+
+    /*    // code action for each params for table function
+    #table(
+        columns: auto,
+        rows: auto,
+        gutter: auto,
+        column-gutter: auto,
+        row-gutter: auto,
+        fill: none,
+        align: auto,
+        stroke: none,
+        inset: relative,
+    )
+        */
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        let uri = params.text_document.uri.to_string();
+        self.client
+            .log_message(MessageType::INFO, "Code action requested")
+            .await;
+
+        if let Some(doc) = self.document.get(&uri) {
+            let content = doc.value();
+            let range = params.range;
+
+            let actions = self.calculate_code_actions(content, range, params.text_document.uri);
+
+            if !actions.is_empty() {
+                self.client
+                    .log_message(MessageType::INFO, "Code actions generated")
+                    .await;
+                return Ok(Some(actions));
+            }
+        }
+        Ok(None)
+    }
 }
 
-impl Backend {
-    fn position_to_offset(&self, text: &str, position: Position) -> Option<usize> {
-        let mut offset = 0;
-        for (line_idx, line) in text.lines().enumerate() {
-            if line_idx == position.line as usize {
-                return Some(offset + position.character as usize);
+impl TypstCodeActions for Backend {
+    fn calculate_code_actions(
+        &self,
+        content: &str,
+        range: Range,
+        uri: Url,
+    ) -> Vec<CodeActionOrCommand> {
+        let mut actions = Vec::new();
+
+        // Check if the text "VS Code" is within the range
+        let vs_code_re = Regex::new(r"VS Code").unwrap();
+
+        for (line_idx, line) in content.lines().enumerate() {
+            if let Some(vs_code_match) = vs_code_re.find(line) {
+                let start = vs_code_match.start();
+                let end = vs_code_match.end();
+
+                // Ensure the match is within the specified range
+                if line_idx == range.start.line as usize && line_idx == range.end.line as usize {
+                    let edit = TextEdit {
+                        range: Range {
+                            start: Position {
+                                line: line_idx as u32,
+                                character: start as u32,
+                            },
+                            end: Position {
+                                line: line_idx as u32,
+                                character: end as u32,
+                            },
+                        },
+                        new_text: "Neovim".to_owned(),
+                    };
+
+                    let workspace_edit = WorkspaceEdit {
+                        changes: Some(HashMap::from([(uri.clone(), vec![edit])])),
+                        document_changes: None,
+                        change_annotations: None,
+                    };
+
+                    let code_action = CodeAction {
+                        title: "Replace 'VS Code' with 'Neovim'".to_owned(),
+                        kind: Some(CodeActionKind::QUICKFIX),
+                        diagnostics: None,
+                        edit: Some(workspace_edit),
+                        command: None,
+                        is_preferred: Some(true),
+                        disabled: None,
+                        data: None,
+                    };
+
+                    // Wrap CodeAction in CodeActionOrCommand
+                    actions.push(CodeActionOrCommand::CodeAction(code_action));
+                }
             }
-            offset += line.len() + 1; // +1 for the newline character
         }
-        None
+        actions
     }
 }
