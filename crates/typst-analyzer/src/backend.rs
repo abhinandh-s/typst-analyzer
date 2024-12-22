@@ -226,6 +226,12 @@ impl LanguageServer for Backend {
 
                 *doc.value_mut() = current_text;
             }
+            // Check for unclosed delimiters
+            let diagnostics = self.check_unclosed_delimiters(&doc);
+            self.client
+                .publish_diagnostics(params.text_document.uri.clone(), diagnostics, None)
+                .await;
+
             self.client
                 .log_message(MessageType::INFO, "File changed!")
                 .await;
@@ -361,5 +367,76 @@ impl TypstCodeActions for Backend {
             }
         }
         actions
+    }
+}
+
+impl TypstDiagnostic for Backend {
+    fn check_unclosed_delimiters(&self, content: &str) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+        let mut stack = Vec::new();
+        let delimiters = [("(", ")"), ("{", "}"), ("[", "]")];
+        let mut line_offset = 0;
+
+        for (line_idx, line) in content.lines().enumerate() {
+            for (char_idx, ch) in line.chars().enumerate() {
+                for &(open, close) in &delimiters {
+                    if ch.to_string() == open {
+                        stack.push((open, close, line_idx, char_idx));
+                    } else if ch.to_string() == close {
+                        if let Some((_, _, _, _)) = stack.pop() {
+                            // Pair found, no action needed
+                        } else {
+                            // Unmatched closing delimiter
+                            diagnostics.push(Diagnostic {
+                                range: Range {
+                                    start: Position {
+                                        line: line_idx as u32,
+                                        character: char_idx as u32,
+                                    },
+                                    end: Position {
+                                        line: line_idx as u32,
+                                        character: char_idx as u32 + 1,
+                                    },
+                                },
+                                severity: Some(DiagnosticSeverity::ERROR),
+                                code: None,
+                                code_description: None,
+                                source: Some("unclosed_delimiter".to_owned()),
+                                message: format!("Unmatched closing delimiter '{}'", close),
+                                related_information: None,
+                                tags: None,
+                                data: None,
+                            });
+                        }
+                    }
+                }
+            }
+            line_offset += line.len() + 1;
+        }
+
+        while let Some((open, close, line_idx, char_idx)) = stack.pop() {
+            diagnostics.push(Diagnostic {
+                range: Range {
+                    start: Position {
+                        line: line_idx as u32,
+                        character: char_idx as u32,
+                    },
+                    end: Position {
+                        line: line_idx as u32,
+                        character: char_idx as u32 + 1,
+                    },
+                },
+                severity: Some(DiagnosticSeverity::ERROR),
+                code: None,
+                code_description: None,
+                source: Some("unclosed_delimiter".to_owned()),
+                message: format!("Unclosed delimiter '{}'", open),
+                related_information: None,
+                tags: None,
+                data: None,
+            });
+        }
+
+        diagnostics
     }
 }
