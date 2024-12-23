@@ -1,4 +1,5 @@
-
+//! This module contains the `SymbolTable` struct, which is used to
+//! store information about symbols and references in a source file.
 
 use std::collections::HashMap;
 
