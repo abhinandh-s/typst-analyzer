@@ -11,16 +11,17 @@ keywords.workspace = true
 
 [dependencies]
 thiserror.workspace = true
-dashmap = "6.1.0"
+dashmap.workspace = true
 tokio.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 tower-lsp.workspace = true
-tracing-subscriber = "0.3.19"
+tracing-subscriber.workspace = true 
 regex.workspace = true
 oxc_index.workspace = true
 typst-syntax.workspace = true
 typst-analyzer-analysis.workspace = true
+ecow.workspace = true
 
 [lints]
 workspace = true

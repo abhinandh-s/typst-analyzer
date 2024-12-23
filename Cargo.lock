@@ -1086,6 +1086,7 @@ name = "typst-analyzer"
 version = "0.1.10"
 dependencies = [
  "dashmap 6.1.0",
+ "ecow",
  "oxc_index",
  "regex",
  "serde",
