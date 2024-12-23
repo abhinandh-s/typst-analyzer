@@ -1083,7 +1083,7 @@ dependencies = [
 
 [[package]]
 name = "typst-analyzer"
-version = "0.1.0"
+version = "0.1.10"
 dependencies = [
  "dashmap 6.1.0",
  "oxc_index",
@@ -1094,12 +1094,13 @@ dependencies = [
  "tokio",
  "tower-lsp",
  "tracing-subscriber",
+ "typst-analyzer-analysis",
  "typst-syntax",
 ]
 
 [[package]]
 name = "typst-analyzer-analysis"
-version = "0.1.0"
+version = "0.1.10"
 
 [[package]]
 name = "typst-syntax"

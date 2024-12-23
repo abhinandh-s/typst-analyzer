@@ -32,6 +32,4 @@ impl SemanticError {
 
 pub type Result<T> = std::result::Result<T, SemanticError>;
 
-pub enum IndentType {
-    
-}
+pub enum IndentType {}
