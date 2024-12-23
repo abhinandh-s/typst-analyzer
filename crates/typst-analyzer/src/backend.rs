@@ -4,10 +4,10 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 use typst_syntax::Source;
+use typst_analyzer_analysis::check_unclosed_delimiters;
 
 use crate::code_actions::handle::TypstCodeActions;
 use crate::completion::handle::TypstCompletion;
-use crate::diagnostics::handle::check_unclosed_delimiters;
 use crate::hints::handle::TypstInlayHints;
 
 #[derive(Debug)]

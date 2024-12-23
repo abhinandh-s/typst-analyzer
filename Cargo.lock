@@ -1101,6 +1101,9 @@ dependencies = [
 [[package]]
 name = "typst-analyzer-analysis"
 version = "0.1.10"
+dependencies = [
+ "tower-lsp",
+]
 
 [[package]]
 name = "typst-syntax"
