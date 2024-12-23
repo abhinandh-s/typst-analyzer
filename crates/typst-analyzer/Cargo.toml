@@ -21,5 +21,9 @@ regex.workspace = true
 oxc_index.workspace = true
 typst-syntax.workspace = true
 
+# [dependencies.typ-analysis]
+# version.workspace = true
+# package = "../typst-analyzer-analysis"
+
 [lints]
 workspace = true

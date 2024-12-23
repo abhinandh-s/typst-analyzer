@@ -7,7 +7,7 @@ use typst_syntax::Source;
 
 use crate::code_actions::handle::TypstCodeActions;
 use crate::completion::handle::TypstCompletion;
-use crate::diagnostics::handle::TypstDiagnostic;
+use crate::diagnostics::handle::check_unclosed_delimiters;
 use crate::hints::handle::TypstInlayHints;
 
 #[derive(Debug)]
@@ -71,47 +71,52 @@ impl LanguageServer for Backend {
             .await;
     }
 
-    async fn shutdown(&self) -> Result<()> {
-        Ok(())
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let cmp =
+            TypstCompletion::get_completion_items_from_typst(__self, params.text_document_position);
+        Ok(Some(CompletionResponse::Array(
+            cmp, /*handle_completions() */
+        )))
     }
 
-    async fn did_change_workspace_folders(&self, _: DidChangeWorkspaceFoldersParams) {
-        self.client
-            .log_message(MessageType::INFO, "Workspace folders changed!")
-            .await;
+    async fn hover(&self, _params: HoverParams) -> Result<Option<Hover>> {
+        Ok(Some(Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: "# will this get displayed\nyes it will".to_owned(),
+            }),
+            range: None,
+        }))
     }
 
-    async fn did_change_configuration(&self, _: DidChangeConfigurationParams) {
-        self.client
-            .log_message(MessageType::INFO, "Configuration changed!")
-            .await;
-    }
-
-    async fn did_change_watched_files(&self, _: DidChangeWatchedFilesParams) {
-        self.client
-            .log_message(MessageType::INFO, "Watched files have changed!")
-            .await;
-    }
-
-    async fn execute_command(&self, _: ExecuteCommandParams) -> Result<Option<Value>> {
-        self.client
-            .log_message(MessageType::INFO, "Command executed!")
-            .await;
-
-        match self.client.apply_edit(WorkspaceEdit::default()).await {
-            Ok(res) if res.applied => {
-                self.client
-                    .log_message(MessageType::INFO, "Edit applied")
-                    .await
-            }
-            Ok(_) => {
-                self.client
-                    .log_message(MessageType::INFO, "Edit rejected")
-                    .await
-            }
-            Err(err) => self.client.log_message(MessageType::ERROR, err).await,
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+        let uri = params.text_document.uri.to_string();
+        if let Some(doc) = self.document.get(&uri) {
+            let hints = self.calculate_inlay_hints(&doc);
+            return Ok(Some(hints));
         }
+        Ok(None)
+    }
 
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        let uri = params.text_document.uri.to_string();
+        self.client
+            .log_message(MessageType::INFO, "Code action requested")
+            .await;
+
+        if let Some(doc) = self.document.get(&uri) {
+            let content = doc.value();
+            let range = params.range;
+
+            let actions = self.calculate_code_actions(content, range, params.text_document.uri);
+
+            if !actions.is_empty() {
+                self.client
+                    .log_message(MessageType::INFO, "Code actions generated")
+                    .await;
+                return Ok(Some(actions));
+            }
+        }
         Ok(None)
     }
 
@@ -158,7 +163,7 @@ impl LanguageServer for Backend {
                 source.replace(doc.value());
             }
             // Check for unclosed delimiters
-            let diagnostics = self.check_unclosed_delimiters(&doc);
+            let diagnostics = check_unclosed_delimiters(&doc);
             self.client
                 .publish_diagnostics(params.text_document.uri.clone(), diagnostics, None)
                 .await;
@@ -183,53 +188,47 @@ impl LanguageServer for Backend {
             .await;
     }
 
-    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        let cmp =
-            TypstCompletion::get_completion_items_from_typst(__self, params.text_document_position);
-        Ok(Some(CompletionResponse::Array(
-            cmp, /*handle_completions() */
-        )))
+    async fn shutdown(&self) -> Result<()> {
+        Ok(())
     }
 
-    async fn hover(&self, _params: HoverParams) -> Result<Option<Hover>> {
-        Ok(Some(Hover {
-            contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value: "# will this get displayed\nyes it will".to_owned(),
-            }),
-            range: None,
-        }))
-    }
-
-    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
-        let uri = params.text_document.uri.to_string();
-        if let Some(doc) = self.document.get(&uri) {
-            let hints = self.calculate_inlay_hints(&doc);
-            return Ok(Some(hints));
-        }
-        Ok(None)
-    }
-
-
-    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
-        let uri = params.text_document.uri.to_string();
+    async fn did_change_workspace_folders(&self, _: DidChangeWorkspaceFoldersParams) {
         self.client
-            .log_message(MessageType::INFO, "Code action requested")
+            .log_message(MessageType::INFO, "Workspace folders changed!")
+            .await;
+    }
+
+    async fn did_change_configuration(&self, _: DidChangeConfigurationParams) {
+        self.client
+            .log_message(MessageType::INFO, "Configuration changed!")
+            .await;
+    }
+
+    async fn did_change_watched_files(&self, _: DidChangeWatchedFilesParams) {
+        self.client
+            .log_message(MessageType::INFO, "Watched files have changed!")
+            .await;
+    }
+
+    async fn execute_command(&self, _: ExecuteCommandParams) -> Result<Option<Value>> {
+        self.client
+            .log_message(MessageType::INFO, "Command executed!")
             .await;
 
-        if let Some(doc) = self.document.get(&uri) {
-            let content = doc.value();
-            let range = params.range;
-
-            let actions = self.calculate_code_actions(content, range, params.text_document.uri);
-
-            if !actions.is_empty() {
+        match self.client.apply_edit(WorkspaceEdit::default()).await {
+            Ok(res) if res.applied => {
                 self.client
-                    .log_message(MessageType::INFO, "Code actions generated")
-                    .await;
-                return Ok(Some(actions));
+                    .log_message(MessageType::INFO, "Edit applied")
+                    .await
             }
+            Ok(_) => {
+                self.client
+                    .log_message(MessageType::INFO, "Edit rejected")
+                    .await
+            }
+            Err(err) => self.client.log_message(MessageType::ERROR, err).await,
         }
+
         Ok(None)
     }
 }
