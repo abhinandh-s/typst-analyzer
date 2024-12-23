@@ -6,13 +6,15 @@ use serde_json::Value;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
+use typst_syntax::{FileId, Source, SyntaxKind, SyntaxNode};
 
-use crate::completion::handle::handle_completions;
+// use crate::completion::handle::handle_completions;
 
 #[derive(Debug)]
 pub struct Backend {
     pub client: Client,
     pub document: DashMap<String, String>,
+    pub sources: DashMap<String, Source>,
 }
 
 pub trait TypstInlayHints {
@@ -94,6 +96,87 @@ impl TypstInlayHints for Backend {
 }
 
 impl Backend {
+    // Generate completion items based on the AST node context
+    fn get_completion_items_from_typst(
+        &self,
+        uri: &str,
+        position: Position,
+    ) -> Vec<CompletionItem> {
+        let mut items = Vec::new();
+
+        if let Some(source) = self.sources.get(uri) {
+            // Convert the position to an offset
+            if let Some(offset) = self.position_to_offset(source.text(), position) {
+                // Find the node at the given position
+                if let Some(node) = self.find_node_at_position(&source, offset) {
+                    // Determine the context and generate completion items based on the node
+                    match node.kind() {
+                        SyntaxKind::Ident => {
+                            // Add completion for Typst identifiers
+                            items.push(CompletionItem {
+                                label: "identifier".to_owned(),
+                                kind: Some(CompletionItemKind::VARIABLE),
+                                detail: Some("Typst identifier".to_owned()),
+                                insert_text: Some("identifier".to_owned()),
+                                ..Default::default()
+                            });
+                        }
+                        SyntaxKind::FuncCall => {
+                            // Add completion for Typst function calls
+                            items.push(CompletionItem {
+                                label: "function".to_owned(),
+                                kind: Some(CompletionItemKind::FUNCTION),
+                                detail: Some("Typst function call".to_owned()),
+                                insert_text: Some("function()".to_owned()),
+                                ..Default::default()
+                            });
+                        }
+                        _ => {
+                            // Add generic Typst keywords
+                            let keywords = vec![
+                                "import", "include", "set", "show", "if", "else", "for",
+                                "while",
+                                // Add other Typst keywords here...
+                            ];
+
+                            for keyword in keywords {
+                                items.push(CompletionItem {
+                                    label: keyword.to_owned(),
+                                    kind: Some(CompletionItemKind::KEYWORD),
+                                    detail: Some("Typst keyword".to_owned()),
+                                    insert_text: Some(keyword.to_owned()),
+                                    ..Default::default()
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        items
+    }
+
+    // Helper function to find the node at a given position in the AST
+    fn find_node_at_position(&self, source: &Source, offset: usize) -> Option<SyntaxNode> {
+        // Recursive function to traverse the syntax tree
+        fn traverse(node: &SyntaxNode, offset: usize, source: &Source) -> Option<SyntaxNode> {
+            if let Some(range) = source.range(node.span()) {
+                if range.start <= offset && offset < range.end {
+                    for child in node.children() {
+                        if let Some(found) = traverse(child, offset, source) {
+                            return Some(found);
+                        }
+                    }
+                    return Some(node.clone());
+                }
+            }
+            None
+        }
+
+        traverse(source.root(), offset, source)
+    }
+
     fn position_to_offset(&self, text: &str, position: Position) -> Option<usize> {
         let mut offset = 0;
         for (line_idx, line) in text.lines().enumerate() {
@@ -194,7 +277,9 @@ impl LanguageServer for Backend {
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let text_document = params.text_document;
         self.document
-            .insert(text_document.uri.to_string(), text_document.text);
+            .insert(text_document.uri.to_string(), text_document.text.clone());
+        let source = Source::detached(text_document.text.clone());
+        self.sources.insert(text_document.uri.to_string(), source);
         self.client
             .log_message(
                 MessageType::INFO,
@@ -228,6 +313,9 @@ impl LanguageServer for Backend {
 
                 *doc.value_mut() = current_text;
             }
+            if let Some(mut source) = self.sources.get_mut(&uri) {
+                source.replace(doc.value());
+            }
             // Check for unclosed delimiters
             let diagnostics = self.check_unclosed_delimiters(&doc);
             self.client
@@ -254,8 +342,13 @@ impl LanguageServer for Backend {
             .await;
     }
 
-    async fn completion(&self, _: CompletionParams) -> Result<Option<CompletionResponse>> {
-        Ok(Some(CompletionResponse::Array(handle_completions())))
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let uri = params.text_document_position.text_document.uri.to_string();
+        let position = params.text_document_position.position;
+        let cmp = self.get_completion_items_from_typst(&uri, position);
+        Ok(Some(CompletionResponse::Array(
+            cmp, /*handle_completions() */
+        )))
     }
 
     async fn hover(&self, _params: HoverParams) -> Result<Option<Hover>> {

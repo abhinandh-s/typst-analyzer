@@ -11,6 +11,7 @@ async fn main() {
     let (service, socket) = LspService::new(|client| Backend {
         client,
         document: DashMap::new(),
+        sources: DashMap::new(),
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }
