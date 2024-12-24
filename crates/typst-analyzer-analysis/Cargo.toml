@@ -11,6 +11,10 @@ keywords.workspace = true
 
 [dependencies]
 tower-lsp.workspace = true
+regex.workspace = true
+dirs.workspace = true
+serde.workspace = true
+serde_yml.workspace = true
 
 [lints]
 workspace = true

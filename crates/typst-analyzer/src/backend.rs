@@ -3,32 +3,31 @@ use serde_json::Value;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
+use typst_analyzer_analysis::{calculate_inlay_hints, check_unclosed_delimiters};
 use typst_syntax::Source;
-use typst_analyzer_analysis::check_unclosed_delimiters;
 
 use crate::code_actions::handle::TypstCodeActions;
 use crate::completion::handle::TypstCompletion;
-use crate::hints::handle::TypstInlayHints;
 
 #[derive(Debug)]
 pub struct Backend {
     pub client: Client,
-    pub document: DashMap<String, String>,
-    pub sources: DashMap<String, Source>,
+    pub doc_map: DashMap<String, String>,
+    pub ast_map: DashMap<String, Source>,
 }
 
-impl Backend {
-    pub fn position_to_offset(&self, text: &str, position: Position) -> Option<usize> {
-        let mut offset = 0;
-        for (line_idx, line) in text.lines().enumerate() {
-            if line_idx == position.line as usize {
-                return Some(offset + position.character as usize);
-            }
-            offset += line.len() + 1; // +1 for the newline character
+pub fn position_to_offset(text: &str, position: Position) -> Option<usize> {
+    let mut offset = 0;
+    for (line_idx, line) in text.lines().enumerate() {
+        if line_idx == position.line as usize {
+            return Some(offset + position.character as usize);
         }
-        None
+        offset += line.len() + 1; // +1 for the newline character
     }
+    None
 }
+
+impl Backend {}
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
@@ -72,8 +71,7 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        let cmp =
-            TypstCompletion::get_completion_items_from_typst(__self, params.text_document_position);
+        let cmp = TypstCompletion::handle_completions(__self, params.text_document_position);
         Ok(Some(CompletionResponse::Array(
             cmp, /*handle_completions() */
         )))
@@ -91,8 +89,8 @@ impl LanguageServer for Backend {
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri = params.text_document.uri.to_string();
-        if let Some(doc) = self.document.get(&uri) {
-            let hints = self.calculate_inlay_hints(&doc);
+        if let Some(doc) = self.doc_map.get(&uri) {
+            let hints = calculate_inlay_hints(&doc);
             return Ok(Some(hints));
         }
         Ok(None)
@@ -104,7 +102,7 @@ impl LanguageServer for Backend {
             .log_message(MessageType::INFO, "Code action requested")
             .await;
 
-        if let Some(doc) = self.document.get(&uri) {
+        if let Some(doc) = self.doc_map.get(&uri) {
             let content = doc.value();
             let range = params.range;
 
@@ -122,10 +120,10 @@ impl LanguageServer for Backend {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let text_document = params.text_document;
-        self.document
+        self.doc_map
             .insert(text_document.uri.to_string(), text_document.text.clone());
         let source = Source::detached(text_document.text.clone());
-        self.sources.insert(text_document.uri.to_string(), source);
+        self.ast_map.insert(text_document.uri.to_string(), source);
         self.client
             .log_message(
                 MessageType::INFO,
@@ -136,7 +134,7 @@ impl LanguageServer for Backend {
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri.to_string();
-        if let Some(mut doc) = self.document.get_mut(&uri) {
+        if let Some(mut doc) = self.doc_map.get_mut(&uri) {
             for change in params.content_changes {
                 // Apply changes incrementally
                 let mut current_text = doc.value().clone();
@@ -146,10 +144,9 @@ impl LanguageServer for Backend {
                     let start = range.start;
                     let end = range.end;
 
-                    let start_idx = self.position_to_offset(&current_text, start).unwrap_or(0);
-                    let end_idx = self
-                        .position_to_offset(&current_text, end)
-                        .unwrap_or(current_text.len());
+                    let start_idx = position_to_offset(&current_text, start).unwrap_or(0);
+                    let end_idx =
+                        position_to_offset(&current_text, end).unwrap_or(current_text.len());
 
                     current_text.replace_range(start_idx..end_idx, &change.text);
                 } else {
@@ -159,7 +156,7 @@ impl LanguageServer for Backend {
 
                 *doc.value_mut() = current_text;
             }
-            if let Some(mut source) = self.sources.get_mut(&uri) {
+            if let Some(mut source) = self.ast_map.get_mut(&uri) {
                 source.replace(doc.value());
             }
             // Check for unclosed delimiters
@@ -182,7 +179,7 @@ impl LanguageServer for Backend {
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri.to_string();
-        self.document.remove(&uri);
+        self.doc_map.remove(&uri);
         self.client
             .log_message(MessageType::INFO, format!("Closed file: {}", uri))
             .await;
