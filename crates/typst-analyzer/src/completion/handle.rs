@@ -2,14 +2,30 @@ use crate::backend::{position_to_offset, Backend};
 use tower_lsp::lsp_types::*;
 use typst_syntax::{LinkedNode, Source, Span, SyntaxKind, SyntaxNode};
 
+use super::markup;
+
 pub trait TypstCompletion {
     fn get_completion_items_from_typst(
         &self,
         doc_pos: TextDocumentPositionParams,
     ) -> Vec<CompletionItem>;
+    fn handle_completions(&self, doc_pos: TextDocumentPositionParams) -> Vec<CompletionItem>;
 }
 
 impl TypstCompletion for Backend {
+    fn handle_completions(&self, doc_pos: TextDocumentPositionParams) -> Vec<CompletionItem> {
+        let mut items = Vec::new();
+        items.append(&mut markup::headers());
+        items.append(&mut markup::single_line_comment());
+        items.append(&mut markup::multi_line_comment());
+        items.append(&mut markup::bold());
+        items.append(&mut markup::emphasis());
+        items.append(&mut markup::raw_text());
+        items.append(&mut markup::label());
+        items.append(&mut markup::reference());
+        items.append(&mut self.get_completion_items_from_typst(doc_pos));
+        items
+    }
     fn get_completion_items_from_typst(
         &self,
         doc_pos: TextDocumentPositionParams,
@@ -19,7 +35,7 @@ impl TypstCompletion for Backend {
         let mut items = Vec::new();
         eprintln!("Completion request for {:?}", uri);
 
-        if let Some(source) = self.sources.get(&uri) {
+        if let Some(source) = self.ast_map.get(&uri) {
             // Convert the position to an offset
             if let Some(offset) = position_to_offset(source.text(), position) {
                 // Find the node at the given position
