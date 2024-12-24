@@ -1,6 +1,6 @@
+use crate::backend::{position_to_offset, Backend};
 use tower_lsp::lsp_types::*;
-use typst_syntax::{Source, SyntaxKind, SyntaxNode};
-use crate::backend::Backend;
+use typst_syntax::{LinkedNode, Source, Span, SyntaxKind, SyntaxNode};
 
 pub trait TypstCompletion {
     fn get_completion_items_from_typst(
@@ -20,38 +20,33 @@ impl TypstCompletion for Backend {
         eprintln!("Completion request for {:?}", uri);
 
         if let Some(source) = self.sources.get(&uri) {
-            eprintln!("Source found for {:?}", uri);
-
             // Convert the position to an offset
-            if let Some(offset) = self.position_to_offset(source.text(), position) {
-                eprintln!("Offset for position {:?}: {:?}", position, offset);
-
+            if let Some(offset) = position_to_offset(source.text(), position) {
                 // Find the node at the given position
                 if let Some(node) = find_node_at_position(&source, offset) {
                     eprintln!("Node found at offset {:?}: {:?}", offset, node.kind());
-
                     // Get contextual completion items based on the node and its context
                     items = get_contextual_completion_items(&source, &node, offset);
-                } else {
-                    eprintln!("No node found at the given offset");
                 }
-            } else {
-                eprintln!("Invalid position, could not convert to offset");
             }
         } else {
             eprintln!("No source found for the given URI");
         }
-
         items
     }
 }
 
 // Generate completion items based on the context (node type)
-fn get_contextual_completion_items(source: &Source, node: &SyntaxNode, offset: usize) -> Vec<CompletionItem> {
+fn get_contextual_completion_items(
+    _source: &Source,
+    node: &SyntaxNode,
+    _offset: usize,
+) -> Vec<CompletionItem> {
     let mut items = Vec::new();
 
     // Check sibling nodes to understand the broader context
-    if let Some(parent) = find_parent_node(source, node, offset) {
+    if let Some(parent) = find_parent_node(node, node.span()) {
+        eprintln!("Parent node found: {:?}", parent.kind());
         match parent.kind() {
             SyntaxKind::Markup | SyntaxKind::Math | SyntaxKind::Code => {
                 items.append(&mut get_markup_math_code_completions());
@@ -63,7 +58,7 @@ fn get_contextual_completion_items(source: &Source, node: &SyntaxNode, offset: u
     } else {
         items.append(&mut get_generic_completions());
     }
-    
+
     let comment_ctx = vec![
         ("TODO: ", "todo", "Task comment"),
         ("NOTE: ", "note", "Task comment"),
@@ -222,19 +217,39 @@ fn find_node_at_position(source: &Source, offset: usize) -> Option<SyntaxNode> {
     traverse(source.root(), offset, source)
 }
 
-// Helper function to find the parent node of a given node
-fn find_parent_node(source: &Source, node: &SyntaxNode, offset: usize) -> Option<SyntaxNode> {
-    // Traverse the tree from the root to find the parent node
-    fn traverse_parent(root: &SyntaxNode, target: &SyntaxNode, source: &Source) -> Option<SyntaxNode> {
-        for child in root.children() {
-            if *child == *target {
-                return Some(root.clone());
-            }
-            if let Some(parent) = traverse_parent(child, target, source) {
-                return Some(parent);
-            }
+/// Finds the parent node of a given `Span` in a syntax tree starting from the provided `root`.
+///
+/// # Arguments
+/// * `root` - The root of the syntax tree.
+/// * `target_span` - The span for which to find the parent node.
+///
+/// # Returns
+/// An `Option<LinkedNode>` containing the parent node if found, or `None` otherwise.
+pub fn find_parent_node(root: &SyntaxNode, target_span: Span) -> Option<LinkedNode<'_>> {
+    // Initialize traversal at the root
+    let mut current_node = LinkedNode::new(root);
+
+    // Traverse the tree upwards to find the parent node containing the target span
+    while let Some(parent) = current_node.parent() {
+        // Get the range of the current node
+        let current_range = current_node.range();
+
+        // Convert target_span into a range
+        let target_range = target_span.number()..(target_span.number() + 1);
+
+        // Check if the target range is fully contained within the current range
+        if current_range.start <= target_range.start as usize
+            && current_range.end >= target_range.end as usize
+        {
+            eprintln!("Found parent node with kind: {:?}", parent.kind());
+            return Some(current_node);
         }
-        None
+
+        // Move to the parent node
+        current_node = parent.clone();
     }
-    traverse_parent(source.root(), node, source)
+
+    // If no parent node is found that contains the target span, return None
+    eprintln!("No parent node found for span: {:?}", target_span);
+    None
 }

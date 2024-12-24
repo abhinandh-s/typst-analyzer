@@ -3,8 +3,8 @@ use serde_json::Value;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
-use typst_syntax::Source;
 use typst_analyzer_analysis::check_unclosed_delimiters;
+use typst_syntax::Source;
 
 use crate::code_actions::handle::TypstCodeActions;
 use crate::completion::handle::TypstCompletion;
@@ -17,18 +17,18 @@ pub struct Backend {
     pub sources: DashMap<String, Source>,
 }
 
-impl Backend {
-    pub fn position_to_offset(&self, text: &str, position: Position) -> Option<usize> {
-        let mut offset = 0;
-        for (line_idx, line) in text.lines().enumerate() {
-            if line_idx == position.line as usize {
-                return Some(offset + position.character as usize);
-            }
-            offset += line.len() + 1; // +1 for the newline character
+pub fn position_to_offset(text: &str, position: Position) -> Option<usize> {
+    let mut offset = 0;
+    for (line_idx, line) in text.lines().enumerate() {
+        if line_idx == position.line as usize {
+            return Some(offset + position.character as usize);
         }
-        None
+        offset += line.len() + 1; // +1 for the newline character
     }
+    None
 }
+
+impl Backend {}
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
@@ -146,10 +146,9 @@ impl LanguageServer for Backend {
                     let start = range.start;
                     let end = range.end;
 
-                    let start_idx = self.position_to_offset(&current_text, start).unwrap_or(0);
-                    let end_idx = self
-                        .position_to_offset(&current_text, end)
-                        .unwrap_or(current_text.len());
+                    let start_idx = position_to_offset(&current_text, start).unwrap_or(0);
+                    let end_idx =
+                        position_to_offset(&current_text, end).unwrap_or(current_text.len());
 
                     current_text.replace_range(start_idx..end_idx, &change.text);
                 } else {
