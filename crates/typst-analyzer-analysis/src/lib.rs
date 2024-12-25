@@ -1,7 +1,8 @@
-mod handle;
+mod actions;
+mod bib;
 mod completion;
 mod diagnostics;
-mod actions;
+mod handle;
 mod hints;
 
 pub use handle::*;

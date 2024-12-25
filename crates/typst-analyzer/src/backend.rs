@@ -71,8 +71,7 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        let cmp =
-            TypstCompletion::handle_completions(__self, params.text_document_position);
+        let cmp = TypstCompletion::handle_completions(__self, params.text_document_position);
         Ok(Some(CompletionResponse::Array(
             cmp, /*handle_completions() */
         )))

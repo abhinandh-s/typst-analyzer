@@ -15,14 +15,8 @@ pub trait TypstCompletion {
 impl TypstCompletion for Backend {
     fn handle_completions(&self, doc_pos: TextDocumentPositionParams) -> Vec<CompletionItem> {
         let mut items = Vec::new();
-        items.append(&mut markup::headers());
-        items.append(&mut markup::single_line_comment());
-        items.append(&mut markup::multi_line_comment());
-        items.append(&mut markup::bold());
-        items.append(&mut markup::emphasis());
-        items.append(&mut markup::raw_text());
-        items.append(&mut markup::label());
-        items.append(&mut markup::reference());
+        items.append(&mut markup::constructors());
+        // items.append(&mut markup::items());
         items.append(&mut self.get_completion_items_from_typst(doc_pos));
         items
     }
