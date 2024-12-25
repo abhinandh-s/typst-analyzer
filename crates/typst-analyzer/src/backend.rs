@@ -1,3 +1,7 @@
+//! The backend module contains the Backend struct that holds the client, the document map and the
+//! AST map. It also contains the implementation of the LanguageServer trait for the Backend
+//! struct.
+
 use dashmap::DashMap;
 use serde_json::Value;
 use tower_lsp::jsonrpc::Result;
@@ -8,18 +12,27 @@ use typst_syntax::Source;
 
 use crate::code_actions::handle::TypstCodeActions;
 use crate::completion::handle::TypstCompletion;
+use crate::typ_logger;
 
+/// The backend struct that holds the client, the document map and the AST map
 #[derive(Debug)]
 pub struct Backend {
     pub client: Client,
+    // Maps a document URI to its text content
     pub doc_map: DashMap<String, String>,
+    // Maps a document URI to its parsed AST
     pub ast_map: DashMap<String, Source>,
 }
 
+/// Helper function to convert a Position to an offset in the text
+///
+/// Offset is the number of characters from the start of the text
 pub fn position_to_offset(text: &str, position: Position) -> Option<usize> {
     let mut offset = 0;
+    // Iterate over the lines and characters in the text
     for (line_idx, line) in text.lines().enumerate() {
         if line_idx == position.line as usize {
+            // If the line index matches the position line, return the offset
             return Some(offset + position.character as usize);
         }
         offset += line.len() + 1; // +1 for the newline character
@@ -27,10 +40,57 @@ pub fn position_to_offset(text: &str, position: Position) -> Option<usize> {
     None
 }
 
+impl Backend {
+    /// funciton to handle did change requests
+    pub async fn handle_did_change(&self, params: DidChangeTextDocumentParams) {
+        let uri = params.text_document.uri.to_string();
+        typ_logger!(
+            "Document changed: {}, version: {}",
+            uri,
+            params.text_document.version
+        );
+        // Check if the document exists in the document map with key (uri) and collect the document if exists
+        if let Some(mut doc) = self.doc_map.get_mut(&uri) {
+            for change in params.content_changes {
+                // Get the document content
+                let mut doc_ctx = doc.value().clone();
+                // Get the range of the change
+                if let Some(range) = change.range {
+                    // Get the start and end positions of the range
+                    let start = range.start;
+                    let end = range.end;
+                    // Convert the position to an offset
+                    let start_idx = position_to_offset(&doc_ctx, start).unwrap_or(0);
+                    let end_idx = position_to_offset(&doc_ctx, end).unwrap_or(doc_ctx.len());
+                    // Replace the text in the range with the new text
+                    doc_ctx.replace_range(start_idx..end_idx, &change.text);
+                } else {
+                    // If range is None, replace the whole text
+                    doc_ctx = change.text.clone();
+                }
+                // Update the document with the new content
+                *doc.value_mut() = doc_ctx;
+            }
+            // Get the AST map corresponding to the document URI
+            if let Some(mut source) = self.ast_map.get_mut(&uri) {
+                // Update the AST map with the new source
+                source.replace(doc.value());
+            }
+            // Check for unclosed delimiters
+            let diagnostics = check_unclosed_delimiters(&doc);
+            // Publish the diagnostics to the client
+            self.client
+                .publish_diagnostics(params.text_document.uri.clone(), diagnostics, None)
+                .await;
+        }
+    }
+}
+
 impl Backend {}
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
+    /// Initialize the language server
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
         Ok(InitializeResult {
             server_info: None,
@@ -39,6 +99,7 @@ impl LanguageServer for Backend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
+                    // Incremental sync
                     TextDocumentSyncKind::INCREMENTAL,
                 )),
                 completion_provider: Some(CompletionOptions {
@@ -64,19 +125,20 @@ impl LanguageServer for Backend {
         })
     }
 
+    /// Notify the language server that it has been initialized
     async fn initialized(&self, _: InitializedParams) {
         self.client
             .log_message(MessageType::INFO, "Language Server initialized!")
             .await;
     }
 
+    /// Handle completion requests
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let cmp = TypstCompletion::handle_completions(__self, params.text_document_position);
-        Ok(Some(CompletionResponse::Array(
-            cmp, /*handle_completions() */
-        )))
+        Ok(Some(CompletionResponse::Array(cmp)))
     }
 
+    /// Handle hover requests
     async fn hover(&self, _params: HoverParams) -> Result<Option<Hover>> {
         Ok(Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
@@ -87,6 +149,7 @@ impl LanguageServer for Backend {
         }))
     }
 
+    /// Handle inlay hint requests
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri = params.text_document.uri.to_string();
         if let Some(doc) = self.doc_map.get(&uri) {
@@ -96,6 +159,7 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    /// Handle code action requests
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         let uri = params.text_document.uri.to_string();
         self.client
@@ -118,6 +182,7 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    /// Handle did open requests
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let text_document = params.text_document;
         self.doc_map
@@ -132,51 +197,22 @@ impl LanguageServer for Backend {
             .await;
     }
 
+    /// Handle did change requests
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        let uri = params.text_document.uri.to_string();
-        if let Some(mut doc) = self.doc_map.get_mut(&uri) {
-            for change in params.content_changes {
-                // Apply changes incrementally
-                let mut current_text = doc.value().clone();
-
-                // Apply the text edit
-                if let Some(range) = change.range {
-                    let start = range.start;
-                    let end = range.end;
-
-                    let start_idx = position_to_offset(&current_text, start).unwrap_or(0);
-                    let end_idx =
-                        position_to_offset(&current_text, end).unwrap_or(current_text.len());
-
-                    current_text.replace_range(start_idx..end_idx, &change.text);
-                } else {
-                    // If range is None, replace the whole text
-                    current_text = change.text.clone();
-                }
-
-                *doc.value_mut() = current_text;
-            }
-            if let Some(mut source) = self.ast_map.get_mut(&uri) {
-                source.replace(doc.value());
-            }
-            // Check for unclosed delimiters
-            let diagnostics = check_unclosed_delimiters(&doc);
-            self.client
-                .publish_diagnostics(params.text_document.uri.clone(), diagnostics, None)
-                .await;
-
-            self.client
-                .log_message(MessageType::INFO, "File changed!")
-                .await;
-        }
+        self.handle_did_change(params).await;
+        self.client
+            .log_message(MessageType::INFO, "File changed!")
+            .await;
     }
 
+    /// Handle did save requests
     async fn did_save(&self, _: DidSaveTextDocumentParams) {
         self.client
             .log_message(MessageType::INFO, "File saved!")
             .await;
     }
 
+    /// Handle did close requests
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri.to_string();
         self.doc_map.remove(&uri);
@@ -185,28 +221,33 @@ impl LanguageServer for Backend {
             .await;
     }
 
+    /// Handle shutdown requests
     async fn shutdown(&self) -> Result<()> {
         Ok(())
     }
 
+    /// Handle did change workspace folders requests
     async fn did_change_workspace_folders(&self, _: DidChangeWorkspaceFoldersParams) {
         self.client
             .log_message(MessageType::INFO, "Workspace folders changed!")
             .await;
     }
 
+    /// Handle did change configuration requests
     async fn did_change_configuration(&self, _: DidChangeConfigurationParams) {
         self.client
             .log_message(MessageType::INFO, "Configuration changed!")
             .await;
     }
 
+    /// Handle did change watched files requests
     async fn did_change_watched_files(&self, _: DidChangeWatchedFilesParams) {
         self.client
             .log_message(MessageType::INFO, "Watched files have changed!")
             .await;
     }
 
+    /// Handle execute command requests
     async fn execute_command(&self, _: ExecuteCommandParams) -> Result<Option<Value>> {
         self.client
             .log_message(MessageType::INFO, "Command executed!")

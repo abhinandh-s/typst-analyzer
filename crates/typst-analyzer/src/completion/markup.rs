@@ -8,17 +8,17 @@ Raw text `print(1)` raw
 Link https://typst.app/ link
 Label <intro> label
 Reference @intro ref
+Bullet list - item list
+Numbered list + item enum
+Term list / Term: description terms
+Line break \ linebreak
+Smart quote 'single' or "double" smartquote
+Code expression #rect(width: 1cm) Scripting
+Comment /* block */, // line Below
 TODO: Heading = Heading heading
-TODO: Bullet list - item list
-TODO: Numbered list + item enum
-TODO: Term list / Term: description terms
 TODO: Math $x^2$ Math
-TODO: Line break \ linebreak
-TODO: Smart quote 'single' or "double" smartquote
 TODO: Symbol shorthand ~, --- Symbols
-TODO: Code expression #rect(width: 1cm) Scripting
 TODO: Character escape Tweet at us \#ad Below
-TODO: Comment /* block */, // line Below
 */
 
 use std::collections::HashMap;
@@ -30,13 +30,6 @@ use super::generic::TypCmpItem;
 pub fn items() -> Vec<CompletionItem> {
     let mut items = Vec::new();
     items.append(&mut headers());
-    items.append(&mut single_line_comment());
-    items.append(&mut multi_line_comment());
-    items.append(&mut bold());
-    items.append(&mut emphasis());
-    items.append(&mut raw_text());
-    items.append(&mut label());
-    items.append(&mut reference());
     items
 }
 
@@ -52,17 +45,14 @@ pub fn constructors() -> Vec<CompletionItem> {
         ("Link", "link", "https://${1:URL}/".to_owned()),
         ("Label", "label", "<${1:Text}>".to_owned()),
         ("Reference", "ref", "@${1:Text}".to_owned()),
-        ("Heading", "heading", "${1:Text} ".to_owned()),
-        ("Bullet list", "list", "- ${1:Text}".to_owned()),
-        ("Numbered list", "enum", "+ ${1:Text}".to_owned()),
+        ("Bullet list", "bullet-list", "- ${1:Text}".to_owned()),
+        ("Numbered list", "numbered-list", "+ ${1:Text}".to_owned()),
         ("Term list", "terms", "/ ${1:Term}: ${2:Description}".to_owned()),
-        ("Math", "Math", "${1:Math}".to_owned()),
         ("Line break", "linebreak", "\\".to_owned()),
-        ("Smart quote", "smartquote", "'${1:Text}' or \"${2:Text}\"".to_owned()),
-        ("Symbol shorthand", "Symbols", "~, ---".to_owned()),
+        ("Smart quote", "smartquote", "'${1:Text}'".to_owned()),
         ("Code expression", "Scripting", "#${1:Code}".to_owned()),
-        ("Character escape", "Below", "\\#${1:Text}".to_owned()),
-        ("Comment", "Below", "/* ${1:Text} */, // ${2:Text}".to_owned()),
+        ("Comment", "line-comment", "// ${1:Text}".to_owned()),
+        ("Comment", "block-comment", "/*\n ${1:Text} \n*/".to_owned()),
     ];
     for ctx in constructor {
         let item = TypCmpItem {
@@ -75,83 +65,6 @@ pub fn constructors() -> Vec<CompletionItem> {
         items.push(item);
     } 
     TypCmpItem::provide_cmp_items(items)
-}
-
-fn bold() -> Vec<CompletionItem> {
-    let item = TypCmpItem {
-        label: "bold",
-        label_details: "markup",
-        kind: CompletionItemKind::CONSTRUCTOR,
-        documentation: "Strong emphasis",
-        insert_text: format!("*{}*", "${1:Text}"),
-    };
-    TypCmpItem::provide_cmp_item(item)
-}
-
-fn emphasis() -> Vec<CompletionItem> {
-    let item = TypCmpItem {
-        label: "emphasis",
-        label_details: "markup",
-        kind: CompletionItemKind::CONSTRUCTOR,
-        documentation: "Emphasis",
-        insert_text: format!("_{}_", "${1:Text}"),
-    };
-    TypCmpItem::provide_cmp_item(item)
-}
-
-fn raw_text() -> Vec<CompletionItem> {
-    let item = TypCmpItem {
-        label: "raw_text",
-        label_details: "markup",
-        kind: CompletionItemKind::CONSTRUCTOR,
-        documentation: "Raw text",
-        insert_text: format!("`{}`", "${1:Text}"),
-    };
-    TypCmpItem::provide_cmp_item(item)
-}
-
-fn label() -> Vec<CompletionItem> {
-    let item = TypCmpItem {
-        label: "label",
-        label_details: "markup",
-        kind: CompletionItemKind::CONSTRUCTOR,
-        documentation: "Label",
-        insert_text: format!("<{}>", "${1:Text}"),
-    };
-    TypCmpItem::provide_cmp_item(item)
-}
-
-fn reference() -> Vec<CompletionItem> {
-    let item = TypCmpItem {
-        label: "reference",
-        label_details: "markup",
-        kind: CompletionItemKind::CONSTRUCTOR,
-        documentation: "Reference",
-        insert_text: format!("@{}", "${1:Text}"),
-    };
-    TypCmpItem::provide_cmp_item(item)
-}
-
-fn single_line_comment() -> Vec<CompletionItem> {
-    let item = TypCmpItem {
-        label: "comment",
-        label_details: "code",
-        kind: CompletionItemKind::FUNCTION,
-        documentation: "Single line comment",
-        insert_text: format!("// {}", "${1:Text}"),
-    };
-    TypCmpItem::provide_cmp_item(item)
-}
-
-fn multi_line_comment() -> Vec<CompletionItem> {
-    let item = TypCmpItem {
-        label: "comments",
-        label_details: "code",
-        kind: CompletionItemKind::FUNCTION,
-        documentation: "Multi line comment",
-        insert_text: format!("/*\n {}\n*/", "${1:Text}"),
-    };
-    TypCmpItem::provide_cmp_item(item)
 }
 
 fn get_headers() -> HashMap<String, String> {

@@ -1195,7 +1195,9 @@ dependencies = [
 name = "typst-analyzer"
 version = "0.1.10"
 dependencies = [
+ "anyhow",
  "dashmap 6.1.0",
+ "dirs",
  "ecow",
  "oxc_index",
  "regex",

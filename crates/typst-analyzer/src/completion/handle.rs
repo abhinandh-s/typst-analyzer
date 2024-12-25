@@ -16,7 +16,7 @@ impl TypstCompletion for Backend {
     fn handle_completions(&self, doc_pos: TextDocumentPositionParams) -> Vec<CompletionItem> {
         let mut items = Vec::new();
         items.append(&mut markup::constructors());
-        // items.append(&mut markup::items());
+        items.append(&mut markup::items());
         items.append(&mut self.get_completion_items_from_typst(doc_pos));
         items
     }
@@ -54,21 +54,6 @@ fn get_contextual_completion_items(
 ) -> Vec<CompletionItem> {
     let mut items = Vec::new();
 
-    // Check sibling nodes to understand the broader context
-    if let Some(parent) = find_parent_node(node, node.span()) {
-        eprintln!("Parent node found: {:?}", parent.kind());
-        match parent.kind() {
-            SyntaxKind::Markup | SyntaxKind::Math | SyntaxKind::Code => {
-                items.append(&mut get_markup_math_code_completions());
-            }
-            _ => {
-                items.append(&mut get_generic_completions());
-            }
-        }
-    } else {
-        items.append(&mut get_generic_completions());
-    }
-
     let comment_ctx = vec![
         ("TODO: ", "todo", "Task comment"),
         ("NOTE: ", "note", "Task comment"),
@@ -78,8 +63,16 @@ fn get_contextual_completion_items(
     ];
     // Add more specific completions based on the node kind
     match node.kind() {
-        SyntaxKind::Dollar => {
-            items.append(&mut get_math_completions());
+        SyntaxKind::LineComment => {
+            for (insert_text, label, detail) in comment_ctx {
+                items.push(CompletionItem {
+                    label: label.to_owned(),
+                    kind: Some(CompletionItemKind::TEXT),
+                    detail: Some(detail.to_owned()),
+                    insert_text: Some(insert_text.to_owned()),
+                    ..Default::default()
+                });
+            }
         }
         // loop though the comment context
         SyntaxKind::BlockComment => {
@@ -94,115 +87,6 @@ fn get_contextual_completion_items(
             }
         }
         _ => {}
-    }
-
-    items
-}
-
-// Helper function to get completions for markup, math, and code contexts
-fn get_markup_math_code_completions() -> Vec<CompletionItem> {
-    let mut items = Vec::new();
-
-    let markup_items = vec![
-        ("Paragraph break", "parbreak"),
-        ("Strong emphasis", "strong"),
-        ("Emphasis", "emph"),
-        ("Raw text", "raw"),
-        ("Link", "link"),
-        ("Label", "label"),
-        ("Reference", "ref"),
-        ("Heading", "heading"),
-        ("Bullet list", "list"),
-        ("Numbered list", "enum"),
-        ("Term list", "terms"),
-        ("Math", "Math"),
-        ("Line break", "linebreak"),
-        ("Smart quote", "smartquote"),
-        ("Symbol shorthand", "Symbols"),
-        ("Code expression", "Scripting"),
-        ("Character escape", "Below"),
-        ("Comment", "Below"),
-    ];
-
-    for (detail, item) in markup_items {
-        items.push(CompletionItem {
-            label: item.to_owned(),
-            kind: Some(CompletionItemKind::TEXT),
-            detail: Some(detail.to_owned()),
-            insert_text: Some(item.to_owned()),
-            ..Default::default()
-        });
-    }
-
-    items
-}
-
-// Helper function to get math-specific completions
-fn get_math_completions() -> Vec<CompletionItem> {
-    let mut items = Vec::new();
-
-    let math_items = vec![
-        ("Fraction", r"\frac{}{}"),
-        ("Square Root", r"\sqrt{}"),
-        ("Summation", r"\sum_{}^{}"),
-        ("Integral", r"\int_{}^{}"),
-        ("Subscript", r"_{ }"),
-        ("Superscript", r"^{ }"),
-    ];
-
-    for (detail, item) in math_items {
-        items.push(CompletionItem {
-            label: item.to_owned(),
-            kind: Some(CompletionItemKind::TEXT),
-            detail: Some(detail.to_owned()),
-            insert_text: Some(item.to_owned()),
-            ..Default::default()
-        });
-    }
-
-    items
-}
-
-// Helper function to get generic completions
-fn get_generic_completions() -> Vec<CompletionItem> {
-    let mut items = Vec::new();
-
-    let keywords = vec![
-        "import",
-        "include",
-        "set",
-        "show",
-        "if",
-        "else",
-        "for",
-        "while",
-        "parbreak",
-        "strong",
-        "emph",
-        "raw",
-        "link",
-        "label",
-        "ref",
-        "heading",
-        "list",
-        "enum",
-        "terms",
-        "Math",
-        "linebreak",
-        "smartquote",
-        "Symbols",
-        "Scripting",
-        "Below",
-    ];
-
-    for keyword in keywords {
-        items.push(CompletionItem {
-            label: keyword.to_owned(),
-            kind: Some(CompletionItemKind::KEYWORD),
-            detail: Some("Typst keyword".to_owned()),
-            insert_text: Some(keyword.to_owned()),
-            ..Default::default()
-        });
     }
 
     items
@@ -235,6 +119,7 @@ fn find_node_at_position(source: &Source, offset: usize) -> Option<SyntaxNode> {
 ///
 /// # Returns
 /// An `Option<LinkedNode>` containing the parent node if found, or `None` otherwise.
+#[allow(dead_code)]
 pub fn find_parent_node(root: &SyntaxNode, target_span: Span) -> Option<LinkedNode<'_>> {
     // Initialize traversal at the root
     let mut current_node = LinkedNode::new(root);
