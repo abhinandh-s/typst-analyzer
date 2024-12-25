@@ -8,11 +8,10 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 use typst_analyzer_analysis::{calculate_inlay_hints, check_unclosed_delimiters};
-use typst_syntax::Source;
+use typst_syntax::SyntaxNode;
 
 use crate::code_actions::handle::TypstCodeActions;
-use crate::completion::handle::TypstCompletion;
-use crate::typ_logger;
+use crate::completion::TypstCompletion;
 
 /// The backend struct that holds the client, the document map and the AST map
 #[derive(Debug)]
@@ -21,7 +20,7 @@ pub struct Backend {
     // Maps a document URI to its text content
     pub doc_map: DashMap<String, String>,
     // Maps a document URI to its parsed AST
-    pub ast_map: DashMap<String, Source>,
+    pub ast_map: DashMap<String, SyntaxNode>,
 }
 
 /// Helper function to convert a Position to an offset in the text
@@ -44,11 +43,6 @@ impl Backend {
     /// funciton to handle did change requests
     pub async fn handle_did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri.to_string();
-        typ_logger!(
-            "Document changed: {}, version: {}",
-            uri,
-            params.text_document.version
-        );
         // Check if the document exists in the document map with key (uri) and collect the document if exists
         if let Some(mut doc) = self.doc_map.get_mut(&uri) {
             for change in params.content_changes {
@@ -71,11 +65,12 @@ impl Backend {
                 // Update the document with the new content
                 *doc.value_mut() = doc_ctx;
             }
-            // Get the AST map corresponding to the document URI
-            if let Some(mut source) = self.ast_map.get_mut(&uri) {
-                // Update the AST map with the new source
-                source.replace(doc.value());
-            }
+            // Parse the document content to generate the AST
+            let ast = typst_syntax::parse(doc.value());
+            // typ_logger!("Document parsed and AST updated: {:?}", &ast);
+
+            // Update the AST map with the new AST
+            self.ast_map.insert(uri, ast);
             // Check for unclosed delimiters
             let diagnostics = check_unclosed_delimiters(&doc);
             // Publish the diagnostics to the client
@@ -153,7 +148,7 @@ impl LanguageServer for Backend {
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri = params.text_document.uri.to_string();
         if let Some(doc) = self.doc_map.get(&uri) {
-            let hints = calculate_inlay_hints(&doc);
+            let hints = calculate_inlay_hints(&doc).unwrap();
             return Ok(Some(hints));
         }
         Ok(None)
@@ -170,7 +165,7 @@ impl LanguageServer for Backend {
             let content = doc.value();
             let range = params.range;
 
-            let actions = self.calculate_code_actions(content, range, params.text_document.uri);
+            let actions = self.generate_code_actions(content, range, params.text_document.uri);
 
             if !actions.is_empty() {
                 self.client
@@ -187,8 +182,11 @@ impl LanguageServer for Backend {
         let text_document = params.text_document;
         self.doc_map
             .insert(text_document.uri.to_string(), text_document.text.clone());
-        let source = Source::detached(text_document.text.clone());
-        self.ast_map.insert(text_document.uri.to_string(), source);
+        let ast = typst_syntax::parse(&text_document.text);
+        // typ_logger!("Document parsed and AST updated: {:?}", &ast);
+
+        // Update the AST map with the new AST
+        self.ast_map.insert(text_document.uri.to_string(), ast);
         self.client
             .log_message(
                 MessageType::INFO,

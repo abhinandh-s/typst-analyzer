@@ -25,6 +25,8 @@ use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, InsertTextFormat, MarkupContent};
 
+use crate::{get_images, typ_logger};
+
 use super::generic::TypCmpItem;
 
 pub fn items() -> Vec<CompletionItem> {
@@ -47,7 +49,11 @@ pub fn constructors() -> Vec<CompletionItem> {
         ("Reference", "ref", "@${1:Text}".to_owned()),
         ("Bullet list", "bullet-list", "- ${1:Text}".to_owned()),
         ("Numbered list", "numbered-list", "+ ${1:Text}".to_owned()),
-        ("Term list", "terms", "/ ${1:Term}: ${2:Description}".to_owned()),
+        (
+            "Term list",
+            "terms",
+            "/ ${1:Term}: ${2:Description}".to_owned(),
+        ),
         ("Line break", "linebreak", "\\".to_owned()),
         ("Smart quote", "smartquote", "'${1:Text}'".to_owned()),
         ("Code expression", "Scripting", "#${1:Code}".to_owned()),
@@ -56,15 +62,15 @@ pub fn constructors() -> Vec<CompletionItem> {
     ];
     for ctx in constructor {
         let item = TypCmpItem {
-            label: ctx.1,
+            label: ctx.1.to_owned(),
             label_details: "markup",
             kind: CompletionItemKind::CONSTRUCTOR,
             documentation: ctx.0,
             insert_text: ctx.2.to_owned(),
         };
         items.push(item);
-    } 
-    TypCmpItem::provide_cmp_items(items)
+    }
+    TypCmpItem::get_cmp(items)
 }
 
 fn get_headers() -> HashMap<String, String> {
@@ -122,4 +128,23 @@ fn headers() -> Vec<CompletionItem> {
         });
     }
     header_items
+}
+
+pub fn typ_image_cmp() -> Result<Vec<CompletionItem>, anyhow::Error> {
+    let mut items = Vec::new();
+    let images = get_images()?;
+        typ_logger!("image: {:#?}", images);
+    for item in images {
+        let image = item.to_string_lossy().to_string();
+        let item = TypCmpItem {
+            label: "image".to_owned(),
+            label_details: "markup",
+            kind: CompletionItemKind::FILE,
+            documentation: "Image",
+            insert_text: format!("#image(\"{}\", width: 100%)", image),
+        };
+        typ_logger!("image: {}", image);
+        items.push(item);
+    }
+    Ok(TypCmpItem::get_cmp(items))
 }

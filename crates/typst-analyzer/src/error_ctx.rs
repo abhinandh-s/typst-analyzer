@@ -16,7 +16,11 @@ pub enum TyError {
 ///
 /// # Example
 /// ```
+/// use typst_analyzer::typ_logger;
+///
 /// typ_logger!("This is a log message.");
+///
+/// let value = 42;
 /// typ_logger!("Formatted log with value: {}", value);
 /// ```
 #[macro_export]

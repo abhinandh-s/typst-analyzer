@@ -6,15 +6,18 @@ license.workspace = true
 authors.workspace = true
 description.workspace = true
 homepage.workspace = true
-documentation.workspace = true
+# documentation.workspace = true
 keywords.workspace = true
 
 [dependencies]
 tower-lsp.workspace = true
+typst-syntax.workspace = true
 regex.workspace = true
 dirs.workspace = true
 serde.workspace = true
 serde_yml.workspace = true
+walkdir.workspace = true
+anyhow.workspace = true
 
 [lints]
 workspace = true
