@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, InsertTextFormat};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
