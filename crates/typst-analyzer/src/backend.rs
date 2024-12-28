@@ -12,6 +12,8 @@ use typst_syntax::SyntaxNode;
 
 use crate::code_actions::handle::TypstCodeActions;
 use crate::completion::TypstCompletion;
+use crate::definition::HandleDefinitions;
+use crate::hover::HandleHover;
 
 /// The backend struct that holds the client, the document map and the AST map
 #[derive(Debug)]
@@ -81,6 +83,12 @@ impl Backend {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone)]
+pub enum OneOfThis<A, B> {
+    Left(A),
+    Right(B),
+}
+
 impl Backend {}
 
 #[tower_lsp::async_trait]
@@ -91,8 +99,20 @@ impl LanguageServer for Backend {
             server_info: None,
             capabilities: ServerCapabilities {
                 inlay_hint_provider: Some(OneOf::Left(true)),
+                definition_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
-                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+                code_action_provider: Some(CodeActionProviderCapability::Options(
+                    CodeActionOptions {
+                        code_action_kinds: Some(vec![
+                            CodeActionKind::QUICKFIX,
+                            CodeActionKind::SOURCE,
+                        ]),
+                        work_done_progress_options: WorkDoneProgressOptions {
+                            work_done_progress: Some(true),
+                        },
+                        resolve_provider: Some(true),
+                    },
+                )),
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     // Incremental sync
                     TextDocumentSyncKind::INCREMENTAL,
@@ -108,12 +128,39 @@ impl LanguageServer for Backend {
                     commands: vec!["dummy.do_something".to_owned()],
                     work_done_progress_options: Default::default(),
                 }),
+                folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
                 workspace: Some(WorkspaceServerCapabilities {
                     workspace_folders: Some(WorkspaceFoldersServerCapabilities {
                         supported: Some(true),
                         change_notifications: Some(OneOf::Left(true)),
                     }),
-                    file_operations: None,
+                    file_operations: Some(WorkspaceFileOperationsServerCapabilities {
+                        will_create: Some(FileOperationRegistrationOptions {
+                            filters: vec![FileOperationFilter {
+                                scheme: Some("url".to_owned()),
+                                pattern: FileOperationPattern {
+                                    glob: "**".to_owned(),
+                                    matches: Some(FileOperationPatternKind::File),
+                                    options: Some(FileOperationPatternOptions {
+                                        ignore_case: Some(false),
+                                    }),
+                                },
+                            }],
+                        }),
+                        did_create: Some(FileOperationRegistrationOptions {
+                            filters: vec![FileOperationFilter {
+                                scheme: Some("url".to_owned()),
+                                pattern: FileOperationPattern {
+                                    glob: "**".to_owned(),
+                                    matches: Some(FileOperationPatternKind::File),
+                                    options: Some(FileOperationPatternOptions {
+                                        ignore_case: Some(false),
+                                    }),
+                                },
+                            }],
+                        }),
+                        ..Default::default()
+                    }),
                 }),
                 ..ServerCapabilities::default()
             },
@@ -127,6 +174,24 @@ impl LanguageServer for Backend {
             .await;
     }
 
+    async fn folding_range(
+        &self,
+        _params: FoldingRangeParams,
+    ) -> Result<Option<Vec<FoldingRange>>> {
+        Ok(None)
+    }
+
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let definitions_result = self.provide_definitions(params);
+        match definitions_result {
+            Ok(definition) => Ok(Some(definition)),
+            Err(_) => Ok(None),
+        }
+    }
+
     /// Handle completion requests
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let cmp = TypstCompletion::handle_completions(__self, params.text_document_position);
@@ -134,14 +199,12 @@ impl LanguageServer for Backend {
     }
 
     /// Handle hover requests
-    async fn hover(&self, _params: HoverParams) -> Result<Option<Hover>> {
-        Ok(Some(Hover {
-            contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value: "# will this get displayed\nyes it will".to_owned(),
-            }),
-            range: None,
-        }))
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let definitions_result = self.provide_hover_ctx(params);
+        match definitions_result {
+            Ok(definition) => Ok(Some(definition)),
+            Err(_) => Ok(None),
+        }
     }
 
     /// Handle inlay hint requests
@@ -165,7 +228,13 @@ impl LanguageServer for Backend {
             let content = doc.value();
             let range = params.range;
 
-            let actions = self.generate_code_actions(content, range, params.text_document.uri);
+            let mut actions =
+                self.generate_code_actions(content, range, params.text_document.uri.clone());
+            actions.append(&mut self.calculate_code_actions_for_bib(
+                content,
+                range,
+                params.text_document.uri,
+            ));
 
             if !actions.is_empty() {
                 self.client

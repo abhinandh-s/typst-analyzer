@@ -7,7 +7,7 @@
 )]
 
 mod actions;
-mod bib;
+pub mod bibliography;
 pub mod completion;
 mod diagnostics;
 pub mod dict;

@@ -39,11 +39,12 @@
               # openssl
               # pkg-config
               # llvmPackages.bintools
-              # eza
               nodePackages_latest.nodejs
               unstable.neovim
               unstable.lazygit
-              # fd
+              unstable.tmux
+              unstable.tmuxPlugins.yank
+              unstable.tmuxPlugins.catppuccin
               unstable.rustup
               rust-bin.stable.latest.default
             ];

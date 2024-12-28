@@ -1,5 +1,7 @@
+use std::collections::VecDeque;
+
 use crate::backend::{position_to_offset, Backend};
-use tower_lsp::lsp_types::*;
+use tower_lsp::lsp_types::{CompletionItem, TextDocumentPositionParams};
 use typst_analyzer_analysis::completion::generate_completions;
 use typst_analyzer_analysis::node::node_walker;
 use typst_syntax::SyntaxKind;
@@ -14,8 +16,8 @@ impl TypstCompletion for Backend {
         if let Some(text) = self.doc_map.get(&uri) {
             if let Some(position) = position_to_offset(&text, doc_pos.position) {
                 if let Some(ast_map_ctx) = self.ast_map.get(&uri) {
-                    let syntax_kind: Vec<SyntaxKind> = node_walker(position, &ast_map_ctx);
-                    return generate_completions(syntax_kind);
+                    let syntax_kind: VecDeque<SyntaxKind> = node_walker(position, &ast_map_ctx);
+                    return generate_completions(syntax_kind.into());
                 }
             }
         }

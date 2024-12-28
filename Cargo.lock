@@ -475,6 +475,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -998,6 +1007,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyerror"
+version = "0.1.11"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "tinystr"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1202,12 +1220,13 @@ dependencies = [
 
 [[package]]
 name = "typst-analyzer"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "anyhow",
  "dashmap 6.1.0",
  "dirs",
  "ecow",
+ "itertools",
  "oxc_index",
  "regex",
  "serde",
@@ -1222,13 +1241,15 @@ dependencies = [
 
 [[package]]
 name = "typst-analyzer-analysis"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "anyhow",
  "dirs",
+ "itertools",
  "regex",
  "serde",
  "serde_yml",
+ "tinyerror",
  "tower-lsp",
  "typst-syntax",
  "walkdir",

@@ -1,23 +1,25 @@
 [package]
 name = "typst-analyzer-analysis"
 edition = "2021"
+documentation = "https://docs.rs/typst-analyzer-analysis/latest/typst_analyzer_analysis/"
 version.workspace = true
 license.workspace = true
 authors.workspace = true
 description.workspace = true
 homepage.workspace = true
-# documentation.workspace = true
 keywords.workspace = true
 
 [dependencies]
-tower-lsp.workspace = true
-typst-syntax.workspace = true
-regex.workspace = true
+anyhow.workspace = true
 dirs.workspace = true
+itertools.workspace = true
+regex.workspace = true
 serde.workspace = true
 serde_yml.workspace = true
+tinyerror.workspace = true
+tower-lsp.workspace = true
+typst-syntax.workspace = true
 walkdir.workspace = true
-anyhow.workspace = true
 
 [lints]
 workspace = true

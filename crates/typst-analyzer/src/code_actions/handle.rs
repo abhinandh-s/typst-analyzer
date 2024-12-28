@@ -9,6 +9,7 @@ use crate::backend::Backend;
 pub trait TypstCodeActions {
     fn get_table_parameters(&self) -> HashMap<String, String>;
     fn parse_funtion_params(&self, content: &str) -> Vec<String>;
+    #[allow(dead_code)]
     fn calculate_code_actions(
         &self,
         content: &str,
@@ -16,6 +17,12 @@ pub trait TypstCodeActions {
         uri: Url,
     ) -> Vec<CodeActionOrCommand>;
     fn generate_code_actions(
+        &self,
+        content: &str,
+        range: Range,
+        uri: Url,
+    ) -> Vec<CodeActionOrCommand>;
+    fn calculate_code_actions_for_bib(
         &self,
         content: &str,
         range: Range,
@@ -58,7 +65,7 @@ impl TypstCodeActions for Backend {
     /// returns vector of existing params
     fn parse_funtion_params(&self, content: &str) -> Vec<String> {
         // Regular expression to find parameters (e.g., `param:`).
-        let re = Regex::new(r"(\w+(-\w+)?)\s*:").unwrap();
+        let re = Regex::new(r"(\w+(-\w+)?)\s*:").unwrap(); // -- FIX: wont work as expected
         let mut existing_params = Vec::new();
 
         for cap in re.captures_iter(content) {
@@ -217,6 +224,7 @@ impl TypstCodeActions for Backend {
         _range: Range,
         uri: Url,
     ) -> Vec<CodeActionOrCommand> {
+        typst_analyzer_analysis::bibliography::parse_bib().unwrap();
         let mut actions = Vec::new();
         let mut multiline_table = String::new();
         let mut in_table_block = false;
@@ -297,5 +305,101 @@ impl TypstCodeActions for Backend {
             }
         }
         actions
+    }
+
+    fn calculate_code_actions_for_bib(
+        &self,
+        content: &str,
+        range: Range,
+        uri: Url,
+    ) -> Vec<CodeActionOrCommand> {
+        let mut actions = Vec::new();
+
+        // Check if the text "VS Code" is within the range
+        let bib_re = Regex::new(r#"([^"]*)"#).unwrap();
+
+        for (line_idx, line) in content.lines().enumerate() {
+            if let Some(vs_code_match) = bib_re.find(line) {
+                let start = vs_code_match.start();
+                let end = vs_code_match.end();
+
+                // Ensure the match is within the specified range
+                if line_idx == range.start.line as usize && line_idx == range.end.line as usize {
+                    let edit = TextEdit {
+                        range: Range {
+                            start: Position {
+                                line: line_idx as u32,
+                                character: start as u32,
+                            },
+                            end: Position {
+                                line: line_idx as u32,
+                                character: end as u32,
+                            },
+                        },
+                        new_text: "".to_owned(),
+                    };
+
+                    let workspace_edit = WorkspaceEdit {
+                        changes: Some(HashMap::from([(uri.clone(), vec![edit])])),
+                        document_changes: None,
+                        change_annotations: None,
+                    };
+
+                    let code_action = CodeAction {
+                        title: "File not found, Create one".to_owned(),
+                        kind: Some(CodeActionKind::QUICKFIX),
+                        diagnostics: Some(vec![Diagnostic {
+                            range: Range {
+                                start: Position {
+                                    line: line_idx as u32,
+                                    character: start as u32,
+                                },
+                                end: Position {
+                                    line: line_idx as u32,
+                                    character: end as u32,
+                                },
+                            },
+                            severity: Some(DiagnosticSeverity::ERROR),
+                            source: Some("File not found, Create one".to_owned()),
+                            message: "File not found, Create one".to_owned(),
+                            ..Default::default()
+                        }]),
+                        edit: Some(workspace_edit),
+                        command: None,
+                        is_preferred: Some(true),
+                        disabled: None,
+                        data: None,
+                    };
+
+                    // Wrap CodeAction in CodeActionOrCommand
+                    actions.push(CodeActionOrCommand::CodeAction(code_action));
+                }
+            }
+        }
+
+        actions
+    }
+}
+
+// unused
+impl Backend {
+    // Register the custom command to the client
+    pub async fn register_custom_command(&self) -> Result<(), anyhow::Error> {
+        // Send a registration message to the client
+        // Register the command for use
+        // (The registration message is handled by the LSP client)
+        Ok(())
+    }
+
+    // Handle the execution of the custom command
+    pub async fn execute_custom_command(
+        &self,
+        params: ExecuteCommandParams,
+    ) -> Result<(), anyhow::Error> {
+        if params.command == "customCommand" {
+            println!("Running custom function...");
+            // Replace this with actual custom logic, e.g., custom function call
+        }
+        Ok(())
     }
 }
