@@ -1,13 +1,17 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum TyError {
+pub enum TypError<'a> {
     #[error("Error: this")]
     NotFound,
     #[error("Error: 0")]
     Invalid,
     #[error("Error: 0")]
     SyntaxError,
+    #[error("Failed to load optional file: {0}")]
+    NonCriticalError(&'a str),
+    #[error("A critical error occurred: {0}")]
+    CriticalError(String),
 }
 
 /// A macro for logging messages to a file in the Typst Analyzer cache directory.

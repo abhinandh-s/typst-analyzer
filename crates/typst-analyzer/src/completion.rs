@@ -6,12 +6,18 @@ use typst_analyzer_analysis::completion::generate_completions;
 use typst_analyzer_analysis::node::node_walker;
 use typst_syntax::SyntaxKind;
 
-pub trait TypstCompletion {
-    fn handle_completions(&self, doc_pos: TextDocumentPositionParams) -> Vec<CompletionItem>;
+pub(crate) trait TypstCompletion {
+    fn handle_completions(
+        &self,
+        doc_pos: TextDocumentPositionParams,
+    ) -> Result<Vec<CompletionItem>, anyhow::Error>;
 }
 
 impl TypstCompletion for Backend {
-    fn handle_completions(&self, doc_pos: TextDocumentPositionParams) -> Vec<CompletionItem> {
+    fn handle_completions(
+        &self,
+        doc_pos: TextDocumentPositionParams,
+    ) -> Result<Vec<CompletionItem>, anyhow::Error> {
         let uri: String = doc_pos.text_document.uri.to_string();
         if let Some(text) = self.doc_map.get(&uri) {
             if let Some(position) = position_to_offset(&text, doc_pos.position) {
@@ -21,6 +27,6 @@ impl TypstCompletion for Backend {
                 }
             }
         }
-        Vec::new()
+        Ok(Vec::new())
     }
 }

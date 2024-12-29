@@ -5,10 +5,10 @@ use typst_analyzer_analysis::node::node_walker;
 use typst_syntax::SyntaxKind;
 
 use crate::backend::{position_to_offset, Backend};
-use crate::error_ctx::TyError;
+use crate::error_ctx::TypError;
 use crate::typ_logger;
 
-pub trait HandleHover {
+pub(crate) trait HandleHover {
     fn provide_hover_ctx(&self, params: HoverParams) -> Result<Hover, anyhow::Error>;
 }
 
@@ -49,7 +49,7 @@ impl HandleHover for Backend {
                 }
             }
         }
-        Err(TyError::Invalid.into())
+        Err(TypError::Invalid.into())
     }
 }
 

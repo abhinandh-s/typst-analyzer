@@ -14,6 +14,7 @@ use crate::code_actions::handle::TypstCodeActions;
 use crate::completion::TypstCompletion;
 use crate::definition::HandleDefinitions;
 use crate::hover::HandleHover;
+use crate::typ_logger;
 
 /// The backend struct that holds the client, the document map and the AST map
 #[derive(Debug)]
@@ -194,8 +195,16 @@ impl LanguageServer for Backend {
 
     /// Handle completion requests
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        let cmp = TypstCompletion::handle_completions(__self, params.text_document_position);
-        Ok(Some(CompletionResponse::Array(cmp)))
+        let cmp_result = TypstCompletion::handle_completions(__self, params.text_document_position);
+        match cmp_result {
+            Ok(cmp) => {
+                return Ok(Some(CompletionResponse::Array(cmp)));
+            }
+            Err(err) => {
+                typ_logger!("{}", err);
+                return Ok(None);
+            }
+        }
     }
 
     /// Handle hover requests
@@ -211,8 +220,10 @@ impl LanguageServer for Backend {
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri = params.text_document.uri.to_string();
         if let Some(doc) = self.doc_map.get(&uri) {
-            let hints = calculate_inlay_hints(&doc).unwrap();
-            return Ok(Some(hints));
+            return match calculate_inlay_hints(&doc) {
+                Ok(hints) => Ok(Some(hints)),
+                Err(_) => Ok(None),
+            };
         }
         Ok(None)
     }
@@ -228,19 +239,25 @@ impl LanguageServer for Backend {
             let content = doc.value();
             let range = params.range;
 
-            let mut actions =
+            let actions =
                 self.generate_code_actions(content, range, params.text_document.uri.clone());
-            actions.append(&mut self.calculate_code_actions_for_bib(
-                content,
-                range,
-                params.text_document.uri,
-            ));
+            let ctx_restlt =
+                self.calculate_code_actions_for_bib(content, range, params.text_document.uri);
 
-            if !actions.is_empty() {
-                self.client
-                    .log_message(MessageType::INFO, "Code actions generated")
-                    .await;
-                return Ok(Some(actions));
+            match ctx_restlt {
+                Ok(mut ctx) => match actions {
+                    Ok(mut actions) => {
+                        actions.append(&mut ctx);
+                        if !actions.is_empty() {
+                            self.client
+                                .log_message(MessageType::INFO, "Code actions generated")
+                                .await;
+                            return Ok(Some(actions));
+                        }
+                    }
+                    Err(err) => typ_logger!("{}", err),
+                },
+                Err(err) => typ_logger!("{}", err),
             }
         }
         Ok(None)

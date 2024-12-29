@@ -1,6 +1,5 @@
-
 use std::path::PathBuf;
-use walkdir::{WalkDir, DirEntry};
+use walkdir::{DirEntry, WalkDir};
 
 use crate::typ_logger;
 
@@ -10,7 +9,10 @@ pub fn get_images() -> Result<Vec<PathBuf>, anyhow::Error> {
     typ_logger!("c_dir: {:?}", c_dir);
 
     if !c_dir.exists() || !c_dir.is_dir() {
-        typ_logger!("Directory does not exist or is not a valid directory: {:?}", c_dir);
+        typ_logger!(
+            "Directory does not exist or is not a valid directory: {:?}",
+            c_dir
+        );
         return Ok(Vec::new());
     }
 
@@ -33,9 +35,14 @@ pub fn get_images() -> Result<Vec<PathBuf>, anyhow::Error> {
                             let ext_str_lower = ext_str.to_lowercase();
 
                             // Check if file has a valid image extension
-                            if ext_str_lower.ends_with("png") || ext_str_lower.ends_with("jpg") || ext_str_lower.ends_with("jpeg") || ext_str_lower.ends_with("gif") || ext_str_lower.ends_with("svg") {
+                            if ext_str_lower.ends_with("png")
+                                || ext_str_lower.ends_with("jpg")
+                                || ext_str_lower.ends_with("jpeg")
+                                || ext_str_lower.ends_with("gif")
+                                || ext_str_lower.ends_with("svg")
+                            {
                                 // Convert to an absolute path
-                                let r_path =entry.path().strip_prefix(&c_dir)?;
+                                let r_path = entry.path().strip_prefix(&c_dir)?;
                                 typ_logger!("Absolute path found: {:?}", r_path);
 
                                 images.push(r_path.to_path_buf()); // Add to the images vector

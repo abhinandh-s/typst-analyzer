@@ -1,19 +1,11 @@
-#![deny(
-    clippy::unwrap_used,
-    clippy::panicking_unwrap,
-    clippy::or_then_unwrap,
-    clippy::get_unwrap,
-    unreachable_pub
-)]
-
 mod actions;
 pub mod bibliography;
 pub mod completion;
+pub mod definition;
 mod diagnostics;
 pub mod dict;
 mod hints;
 pub mod node;
-pub mod definition;
 
 pub use completion::resources::*;
 pub use diagnostics::handle::*;

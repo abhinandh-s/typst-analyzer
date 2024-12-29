@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::panicking_unwrap)]
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput};
@@ -73,4 +75,3 @@ pub fn my_error_derive(input: TokenStream) -> TokenStream {
 
     TokenStream::from(output)
 }
-

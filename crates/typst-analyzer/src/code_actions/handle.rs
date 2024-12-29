@@ -6,28 +6,28 @@ use typst_analyzer_analysis::dict::*;
 
 use crate::backend::Backend;
 
-pub trait TypstCodeActions {
+pub(crate) trait TypstCodeActions {
     fn get_table_parameters(&self) -> HashMap<String, String>;
-    fn parse_funtion_params(&self, content: &str) -> Vec<String>;
+    fn parse_funtion_params(&self, content: &str) -> Result<Vec<String>, anyhow::Error>;
     #[allow(dead_code)]
     fn calculate_code_actions(
         &self,
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Vec<CodeActionOrCommand>;
+    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error>;
     fn generate_code_actions(
         &self,
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Vec<CodeActionOrCommand>;
+    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error>;
     fn calculate_code_actions_for_bib(
         &self,
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Vec<CodeActionOrCommand>;
+    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error>;
 }
 
 /*    // code action for each params for table function
@@ -63,9 +63,9 @@ impl TypstCodeActions for Backend {
     /// Parses the content inside `#table(...)` and extracts the parameters already defined.
     ///
     /// returns vector of existing params
-    fn parse_funtion_params(&self, content: &str) -> Vec<String> {
+    fn parse_funtion_params(&self, content: &str) -> Result<Vec<String>, anyhow::Error> {
         // Regular expression to find parameters (e.g., `param:`).
-        let re = Regex::new(r"(\w+(-\w+)?)\s*:").unwrap(); // -- FIX: wont work as expected
+        let re = Regex::new(r"(\w+(-\w+)?)\s*:")?; // -- FIX: wont work as expected
         let mut existing_params = Vec::new();
 
         for cap in re.captures_iter(content) {
@@ -73,7 +73,7 @@ impl TypstCodeActions for Backend {
                 existing_params.push(param.as_str().to_owned());
             }
         }
-        existing_params
+        Ok(existing_params)
     }
 
     #[allow(unused)]
@@ -82,11 +82,11 @@ impl TypstCodeActions for Backend {
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Vec<CodeActionOrCommand> {
+    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error> {
         let mut actions = Vec::new();
 
         // Check if the text "VS Code" is within the range
-        let vs_code_re = Regex::new(r"VS Code").unwrap();
+        let vs_code_re = Regex::new(r"VS Code")?;
 
         for (line_idx, line) in content.lines().enumerate() {
             if let Some(vs_code_match) = vs_code_re.find(line) {
@@ -131,91 +131,7 @@ impl TypstCodeActions for Backend {
                 }
             }
         }
-
-        let mut multiline_table = String::new();
-        let mut in_table_block = false;
-        let mut table_start_line = 0;
-        let mut table_contain_params = false;
-
-        for (line_idx, line) in content.lines().enumerate() {
-            if line.contains("#table()") {
-                table_contain_params = false;
-            } else if line.contains("#table(") {
-                table_contain_params = true;
-                in_table_block = true;
-                table_start_line = line_idx;
-            }
-
-            if in_table_block {
-                multiline_table.push_str(line);
-                multiline_table.push('\n');
-
-                if line.contains(")") {
-                    in_table_block = false;
-
-                    // Extract existing parameters inside `#table(...)`.
-                    let existing_params: Vec<String> = self.parse_funtion_params(&multiline_table);
-
-                    // Get all default parameters.
-                    let all_params: HashMap<String, String> = self.get_table_parameters();
-
-                    // Generate a separate code action for each missing parameter.
-                    for (param, default_value) in all_params {
-                        if !existing_params.contains(&param) {
-                            let title = format!("Add missing parameter: {}", param);
-
-                            // Create a new parameter string.
-                            let new_param = format!("\n  {}: {},", param, default_value);
-                            // Prepare the text edit to add the missing parameter.
-                            let edit = TextEdit {
-                                range: Range {
-                                    start: Position {
-                                        // line: table_start_line as u32 + 1,
-                                        // character: 2,
-                                        line: table_start_line as u32,
-                                        character: line.find("#table(").unwrap_or(5) as u32 + 7, // Position after `#table(`.
-                                    },
-                                    end: Position {
-                                        // line: table_start_line as u32 + 1,
-                                        // character: 2,
-                                        line: table_start_line as u32,
-                                        character: line.find("#table(").unwrap_or(0) as u32 + 7,
-                                    },
-                                },
-                                new_text: new_param,
-                            };
-
-                            // Define the workspace edit for the code action.
-                            let workspace_edit = WorkspaceEdit {
-                                changes: Some(HashMap::from([(uri.clone(), vec![edit])])),
-                                document_changes: None,
-                                change_annotations: None,
-                            };
-
-                            // Create the code action for adding the missing parameter.
-                            let code_action = CodeAction {
-                                title,
-                                kind: Some(CodeActionKind::QUICKFIX),
-                                diagnostics: None,
-                                edit: Some(workspace_edit),
-                                command: None,
-                                is_preferred: Some(true),
-                                disabled: None,
-                                data: None,
-                            };
-
-                            // Add the code action to the list.
-                            actions.push(CodeActionOrCommand::CodeAction(code_action));
-                        }
-                    }
-
-                    // Reset the multiline table content for the next block.
-                    multiline_table.clear();
-                }
-            }
-        }
-
-        actions
+        Ok(actions)
     }
 
     fn generate_code_actions(
@@ -223,8 +139,8 @@ impl TypstCodeActions for Backend {
         content: &str,
         _range: Range,
         uri: Url,
-    ) -> Vec<CodeActionOrCommand> {
-        typst_analyzer_analysis::bibliography::parse_bib().unwrap();
+    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error> {
+        typst_analyzer_analysis::bibliography::parse_bib()?;
         let mut actions = Vec::new();
         let mut multiline_table = String::new();
         let mut in_table_block = false;
@@ -244,7 +160,8 @@ impl TypstCodeActions for Backend {
                     in_table_block = false;
 
                     // Extract existing parameters inside `#table(...)`.
-                    let existing_params: Vec<String> = self.parse_funtion_params(&multiline_table);
+                    let existing_params: Vec<String> =
+                        self.parse_funtion_params(&multiline_table)?;
 
                     // Get all default parameters.
                     let all_params: HashMap<String, String> = self.get_table_parameters();
@@ -304,7 +221,7 @@ impl TypstCodeActions for Backend {
                 }
             }
         }
-        actions
+        Ok(actions)
     }
 
     fn calculate_code_actions_for_bib(
@@ -312,11 +229,11 @@ impl TypstCodeActions for Backend {
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Vec<CodeActionOrCommand> {
+    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error> {
         let mut actions = Vec::new();
 
         // Check if the text "VS Code" is within the range
-        let bib_re = Regex::new(r#"([^"]*)"#).unwrap();
+        let bib_re = Regex::new(r#"([^"]*)"#)?;
 
         for (line_idx, line) in content.lines().enumerate() {
             if let Some(vs_code_match) = bib_re.find(line) {
@@ -377,7 +294,7 @@ impl TypstCodeActions for Backend {
             }
         }
 
-        actions
+        Ok(actions)
     }
 }
 

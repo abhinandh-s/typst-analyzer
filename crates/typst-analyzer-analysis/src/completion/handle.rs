@@ -3,7 +3,9 @@ use typst_syntax::SyntaxKind;
 
 use super::{code, markup};
 
-pub fn generate_completions(context: Vec<SyntaxKind>) -> Vec<CompletionItem> {
+pub fn generate_completions(
+    context: Vec<SyntaxKind>,
+) -> Result<Vec<CompletionItem>, anyhow::Error> {
     // Generate completion candidates based on the context
     let mut completions: Vec<CompletionItem> = vec![];
     for kind in context {
@@ -23,7 +25,7 @@ pub fn generate_completions(context: Vec<SyntaxKind>) -> Vec<CompletionItem> {
         if kind == SyntaxKind::Markup {
             completions.append(&mut markup::items());
             completions.append(&mut markup::constructors());
-            completions.append(&mut markup::typ_image_cmp().expect(""));
+            completions.append(&mut markup::typ_image_cmp()?);
             completions.append(&mut code::constructors());
         }
 
@@ -31,7 +33,7 @@ pub fn generate_completions(context: Vec<SyntaxKind>) -> Vec<CompletionItem> {
             completions.append(&mut markup::items());
         }
     }
-    completions
+    Ok(completions)
 }
 // Generate completion items based on the context (node type)
 fn typ_comments_cmp() -> Vec<CompletionItem> {

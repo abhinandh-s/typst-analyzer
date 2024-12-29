@@ -7,10 +7,10 @@ use typst_analyzer_analysis::node::node_walker;
 use typst_syntax::SyntaxKind;
 
 use crate::backend::{position_to_offset, Backend};
-use crate::error_ctx::TyError;
+use crate::error_ctx::TypError;
 use crate::typ_logger;
 
-pub trait HandleDefinitions {
+pub(crate) trait HandleDefinitions {
     fn provide_definitions(
         &self,
         params: GotoDefinitionParams,
@@ -33,7 +33,9 @@ impl HandleDefinitions for Backend {
                     // a RefMarker ie, reference.
                     let syntax_kind: VecDeque<SyntaxKind> = node_walker(position, &ast_map_ctx);
                     typ_logger!("syntax_kind: {:?}", syntax_kind);
-                    let refmarker = syntax_kind.back().unwrap();
+                    let refmarker = syntax_kind.back().ok_or(TypError::NonCriticalError(
+                        "Failed to get SyntaxKind from node_walker",
+                    ))?;
                     // refmarker = RefMarker
                     typ_logger!("refmarker: {:?}", refmarker);
                     // dummy return
@@ -53,6 +55,6 @@ impl HandleDefinitions for Backend {
                 }
             }
         }
-       Err(TyError::Invalid.into()) 
+        Err(TypError::Invalid.into())
     }
 }

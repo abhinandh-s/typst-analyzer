@@ -133,7 +133,7 @@ fn headers() -> Vec<CompletionItem> {
 pub fn typ_image_cmp() -> Result<Vec<CompletionItem>, anyhow::Error> {
     let mut items = Vec::new();
     let images = get_images()?;
-        typ_logger!("image: {:#?}", images);
+    typ_logger!("image: {:#?}", images);
     for item in images {
         let image = item.to_string_lossy().to_string();
         let item = TypCmpItem {
