@@ -11,7 +11,7 @@ pub fn generate_completions(
     for kind in context {
         // Check all possible patterns and add relevant completions
         if kind == SyntaxKind::FuncCall {
-            completions.append(&mut markup::items());
+            completions.append(&mut markup::cmp_items());
         }
 
         if kind == SyntaxKind::LineComment {
@@ -23,14 +23,13 @@ pub fn generate_completions(
         }
 
         if kind == SyntaxKind::Markup {
-            completions.append(&mut markup::items());
-            completions.append(&mut markup::constructors());
+            completions.append(&mut markup::cmp_items());
             completions.append(&mut markup::typ_image_cmp()?);
             completions.append(&mut code::constructors());
         }
 
         if kind == SyntaxKind::Equation {
-            completions.append(&mut markup::items());
+            completions.append(&mut markup::cmp_items());
         }
     }
     Ok(completions)

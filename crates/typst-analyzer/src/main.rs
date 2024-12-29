@@ -12,6 +12,7 @@ async fn main() {
         client,
         doc_map: DashMap::new(),
         ast_map: DashMap::new(),
+        symbol_table: DashMap::new(),
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

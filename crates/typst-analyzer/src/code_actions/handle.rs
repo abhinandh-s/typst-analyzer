@@ -9,8 +9,7 @@ use crate::backend::Backend;
 pub(crate) trait TypstCodeActions {
     fn get_table_parameters(&self) -> HashMap<String, String>;
     fn parse_funtion_params(&self, content: &str) -> Result<Vec<String>, anyhow::Error>;
-    #[allow(dead_code)]
-    fn calculate_code_actions(
+    fn calculate_code_actions_for_vs_code(
         &self,
         content: &str,
         range: Range,
@@ -76,8 +75,7 @@ impl TypstCodeActions for Backend {
         Ok(existing_params)
     }
 
-    #[allow(unused)]
-    fn calculate_code_actions(
+    fn calculate_code_actions_for_vs_code(
         &self,
         content: &str,
         range: Range,
@@ -137,7 +135,7 @@ impl TypstCodeActions for Backend {
     fn generate_code_actions(
         &self,
         content: &str,
-        _range: Range,
+        range: Range,
         uri: Url,
     ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error> {
         typst_analyzer_analysis::bibliography::parse_bib()?;
@@ -221,6 +219,10 @@ impl TypstCodeActions for Backend {
                 }
             }
         }
+
+        let mut vs_code_action = self.calculate_code_actions_for_vs_code(content, range, uri)?;
+        actions.append(&mut vs_code_action);
+
         Ok(actions)
     }
 

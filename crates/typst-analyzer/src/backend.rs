@@ -13,7 +13,9 @@ use typst_syntax::SyntaxNode;
 use crate::code_actions::handle::TypstCodeActions;
 use crate::completion::TypstCompletion;
 use crate::definition::HandleDefinitions;
+use crate::error_ctx::TypError;
 use crate::hover::HandleHover;
+use crate::symbols::{Symbol, SymbolTable};
 use crate::typ_logger;
 
 /// The backend struct that holds the client, the document map and the AST map
@@ -24,6 +26,8 @@ pub struct Backend {
     pub doc_map: DashMap<String, String>,
     // Maps a document URI to its parsed AST
     pub ast_map: DashMap<String, SyntaxNode>,
+    // Maps symbol names to Symbol metadata
+    pub symbol_table: DashMap<String, Symbol>,
 }
 
 /// Helper function to convert a Position to an offset in the text
@@ -46,6 +50,11 @@ impl Backend {
     /// funciton to handle did change requests
     pub async fn handle_did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri.to_string();
+        let populate_symbol_table_re = self.populate_symbol_table(params.clone());
+        match populate_symbol_table_re {
+            Ok(_) => {}
+            Err(err) => typ_logger!("{}", TypError::NonCriticalError(err.to_string().as_str())),
+        }
         // Check if the document exists in the document map with key (uri) and collect the document if exists
         if let Some(mut doc) = self.doc_map.get_mut(&uri) {
             for change in params.content_changes {

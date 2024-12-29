@@ -1,25 +1,32 @@
-/*!
-# Markup
-
-Paragraph break Blank line parbreak
-Strong emphasis *strong* strong
-Emphasis _emphasis_ emph
-Raw text `print(1)` raw
-Link https://typst.app/ link
-Label <intro> label
-Reference @intro ref
-Bullet list - item list
-Numbered list + item enum
-Term list / Term: description terms
-Line break \ linebreak
-Smart quote 'single' or "double" smartquote
-Code expression #rect(width: 1cm) Scripting
-Comment /* block */, // line Below
-TODO: Heading = Heading heading
-TODO: Math $x^2$ Math
-TODO: Symbol shorthand ~, --- Symbols
-TODO: Character escape Tweet at us \#ad Below
-*/
+//! # Markup Module
+//!
+//! This module provides completion items for markup-related constructs in Typst.
+//! The functions within this module generate completion items for various markup
+//! elements such as headings, lists, inline formatting, and more. These completion
+//! items can be used by a Language Server Protocol (LSP) implementation to assist
+//! users in writing Typst documents.
+//!
+//! ## Supported Markup Items
+//! - Paragraph break Blank line parbreak
+//! - Strong emphasis *strong* strong
+//! - Emphasis _emphasis_ emph
+//! - Raw text `print(1)` raw
+//! - Link https://typst.app/ link
+//! - Label <intro> label
+//! - Reference @intro ref
+//! - Bullet list - item list
+//! - Numbered list + item enum
+//! - Term list / Term: description terms
+//! - Line break \ linebreak
+//! - Smart quote 'single' or "double" smartquote
+//! - Code expression #rect(width: 1cm) Scripting
+//! - Comment /* block */, // line Below
+//! - Heading = Heading heading
+//! - Math $x^2$ Math
+//!   TODO: Can we do anything about this
+//!     Symbol shorthand ~, --- Symbols
+//!     Character escape Tweet at us \#ad Below
+//!     image
 
 use std::collections::HashMap;
 
@@ -29,13 +36,14 @@ use crate::{get_images, typ_logger};
 
 use super::generic::TypCmpItem;
 
-pub fn items() -> Vec<CompletionItem> {
+pub fn cmp_items() -> Vec<CompletionItem> {
     let mut items = Vec::new();
     items.append(&mut headers());
+    items.append(&mut constructors());
     items
 }
 
-pub fn constructors() -> Vec<CompletionItem> {
+fn constructors() -> Vec<CompletionItem> {
     let mut items = Vec::new();
     // vec of tuples with the constructor name, the label details and insert text
     let constructor: Vec<(&str, &str, String)> = vec![
@@ -47,8 +55,8 @@ pub fn constructors() -> Vec<CompletionItem> {
         ("Link", "link", "https://${1:URL}/".to_owned()),
         ("Label", "label", "<${1:Text}>".to_owned()),
         ("Reference", "ref", "@${1:Text}".to_owned()),
-        ("Bullet list", "bullet-list", "- ${1:Text}".to_owned()),
-        ("Numbered list", "numbered-list", "+ ${1:Text}".to_owned()),
+        ("Bullet list", "bullet-list", "- ${1:Item}".to_owned()),
+        ("Numbered list", "numbered-list", "+ ${1:Item}".to_owned()),
         (
             "Term list",
             "terms",
@@ -59,6 +67,7 @@ pub fn constructors() -> Vec<CompletionItem> {
         ("Code expression", "Scripting", "#${1:Code}".to_owned()),
         ("Comment", "line-comment", "// ${1:Text}".to_owned()),
         ("Comment", "block-comment", "/*\n ${1:Text} \n*/".to_owned()),
+        ("Maths Block", "maths", "\\$ ${1:Text} \\$".to_owned()),
     ];
     for ctx in constructor {
         let item = TypCmpItem {

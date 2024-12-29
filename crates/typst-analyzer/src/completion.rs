@@ -9,18 +9,18 @@ use typst_syntax::SyntaxKind;
 pub(crate) trait TypstCompletion {
     fn handle_completions(
         &self,
-        doc_pos: TextDocumentPositionParams,
+        params: TextDocumentPositionParams,
     ) -> Result<Vec<CompletionItem>, anyhow::Error>;
 }
 
 impl TypstCompletion for Backend {
     fn handle_completions(
         &self,
-        doc_pos: TextDocumentPositionParams,
+        params: TextDocumentPositionParams,
     ) -> Result<Vec<CompletionItem>, anyhow::Error> {
-        let uri: String = doc_pos.text_document.uri.to_string();
+        let uri: String = params.text_document.uri.to_string();
         if let Some(text) = self.doc_map.get(&uri) {
-            if let Some(position) = position_to_offset(&text, doc_pos.position) {
+            if let Some(position) = position_to_offset(&text, params.position) {
                 if let Some(ast_map_ctx) = self.ast_map.get(&uri) {
                     let syntax_kind: VecDeque<SyntaxKind> = node_walker(position, &ast_map_ctx);
                     return generate_completions(syntax_kind.into());

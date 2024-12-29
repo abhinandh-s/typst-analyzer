@@ -8,7 +8,7 @@ pub enum TypError<'a> {
     Invalid,
     #[error("Error: 0")]
     SyntaxError,
-    #[error("Failed to load optional file: {0}")]
+    #[error("NonCriticalError: {0}")]
     NonCriticalError(&'a str),
     #[error("A critical error occurred: {0}")]
     CriticalError(String),
