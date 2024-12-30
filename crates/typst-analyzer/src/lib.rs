@@ -5,5 +5,6 @@ pub(crate) mod definition;
 pub mod error_ctx;
 mod diagnostics;
 pub(crate) mod hover;
-pub(crate) mod symbols;
+mod symbols;
 pub(crate) mod workspace;
+pub mod prelude;

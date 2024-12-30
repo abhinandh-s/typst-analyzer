@@ -91,8 +91,13 @@ impl Backend {
             }
             // Check for unclosed delimiters
             let mut diagnostics = check_unclosed_delimiters(&doc);
+            if let Ok(mut missing_labels) =
+                self.missing_label_error(params.text_document.uri.clone())
+            {
+                diagnostics.append(&mut missing_labels);
+            }
             if let Ok(mut syntax_err) = self.syntax_error(params.text_document.uri.clone()) {
-            diagnostics.append(&mut syntax_err);
+                diagnostics.append(&mut syntax_err);
             }
             // Publish the diagnostics to the client
             self.client
