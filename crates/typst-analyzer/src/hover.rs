@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use anyhow::Error;
 use tower_lsp::lsp_types::{Hover, HoverContents, HoverParams, MarkupContent, MarkupKind};
 use typst_analyzer_analysis::node::node_walker;
 use typst_syntax::SyntaxKind;
@@ -9,11 +10,11 @@ use crate::error_ctx::TypError;
 use crate::typ_logger;
 
 pub(crate) trait HandleHover {
-    fn provide_hover_ctx(&self, params: HoverParams) -> Result<Hover, anyhow::Error>;
+    fn provide_hover_ctx(&self, params: HoverParams) -> Result<Hover, Error>;
 }
 
 impl HandleHover for Backend {
-    fn provide_hover_ctx(&self, params: HoverParams) -> Result<Hover, anyhow::Error> {
+    fn provide_hover_ctx(&self, params: HoverParams) -> Result<Hover, Error> {
         let mut hover_ctx = String::new();
         let uri = params.text_document_position_params.text_document.uri;
         if let Some(text) = self.doc_map.get(&uri.to_string()) {

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::Error;
 use regex::Regex;
 use tower_lsp::lsp_types::*;
 use typst_analyzer_analysis::dict::*;
@@ -8,25 +9,25 @@ use crate::backend::Backend;
 
 pub(crate) trait TypstCodeActions {
     fn get_table_parameters(&self) -> HashMap<String, String>;
-    fn parse_funtion_params(&self, content: &str) -> Result<Vec<String>, anyhow::Error>;
+    fn parse_funtion_params(&self, content: &str) -> Result<Vec<String>, Error>;
     fn calculate_code_actions_for_vs_code(
         &self,
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error>;
+    ) -> Result<Vec<CodeActionOrCommand>, Error>;
     fn generate_code_actions(
         &self,
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error>;
+    ) -> Result<Vec<CodeActionOrCommand>, Error>;
     fn calculate_code_actions_for_bib(
         &self,
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error>;
+    ) -> Result<Vec<CodeActionOrCommand>, Error>;
 }
 
 /*    // code action for each params for table function
@@ -62,7 +63,7 @@ impl TypstCodeActions for Backend {
     /// Parses the content inside `#table(...)` and extracts the parameters already defined.
     ///
     /// returns vector of existing params
-    fn parse_funtion_params(&self, content: &str) -> Result<Vec<String>, anyhow::Error> {
+    fn parse_funtion_params(&self, content: &str) -> Result<Vec<String>, Error> {
         // Regular expression to find parameters (e.g., `param:`).
         let re = Regex::new(r"(\w+(-\w+)?)\s*:")?; // -- FIX: wont work as expected
         let mut existing_params = Vec::new();
@@ -80,7 +81,7 @@ impl TypstCodeActions for Backend {
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error> {
+    ) -> Result<Vec<CodeActionOrCommand>, Error> {
         let mut actions = Vec::new();
 
         // Check if the text "VS Code" is within the range
@@ -137,7 +138,7 @@ impl TypstCodeActions for Backend {
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error> {
+    ) -> Result<Vec<CodeActionOrCommand>, Error> {
         typst_analyzer_analysis::bibliography::parse_bib()?;
         let mut actions = Vec::new();
         let mut multiline_table = String::new();
@@ -231,7 +232,7 @@ impl TypstCodeActions for Backend {
         content: &str,
         range: Range,
         uri: Url,
-    ) -> Result<Vec<CodeActionOrCommand>, anyhow::Error> {
+    ) -> Result<Vec<CodeActionOrCommand>, Error> {
         let mut actions = Vec::new();
 
         // Check if the text "VS Code" is within the range
@@ -303,7 +304,7 @@ impl TypstCodeActions for Backend {
 // unused
 impl Backend {
     // Register the custom command to the client
-    pub async fn register_custom_command(&self) -> Result<(), anyhow::Error> {
+    pub async fn register_custom_command(&self) -> Result<(), Error> {
         // Send a registration message to the client
         // Register the command for use
         // (The registration message is handled by the LSP client)
@@ -314,7 +315,7 @@ impl Backend {
     pub async fn execute_custom_command(
         &self,
         params: ExecuteCommandParams,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         if params.command == "customCommand" {
             println!("Running custom function...");
             // Replace this with actual custom logic, e.g., custom function call

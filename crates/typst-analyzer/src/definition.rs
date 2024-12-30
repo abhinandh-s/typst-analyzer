@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use anyhow::Error;
 use tower_lsp::lsp_types::{
     GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range,
 };
@@ -14,14 +15,14 @@ pub(crate) trait HandleDefinitions {
     fn provide_definitions(
         &self,
         params: GotoDefinitionParams,
-    ) -> Result<GotoDefinitionResponse, anyhow::Error>;
+    ) -> Result<GotoDefinitionResponse, Error>;
 }
 
 impl HandleDefinitions for Backend {
     fn provide_definitions(
         &self,
         params: GotoDefinitionParams,
-    ) -> Result<GotoDefinitionResponse, anyhow::Error> {
+    ) -> Result<GotoDefinitionResponse, Error> {
         let uri = params.text_document_position_params.text_document.uri;
         if let Some(text) = self.doc_map.get(&uri.to_string()) {
             if let Some(position) =

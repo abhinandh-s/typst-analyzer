@@ -43,6 +43,7 @@
               unstable.neovim
               unstable.lazygit
               unstable.tmux
+              btop
               unstable.tmuxPlugins.yank
               unstable.tmuxPlugins.catppuccin
               unstable.rustup

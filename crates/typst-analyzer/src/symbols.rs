@@ -1,9 +1,5 @@
-#![allow(dead_code)]
-
-use anyhow::anyhow;
-use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, Location, Position, Range, Url,
-};
+use anyhow::{anyhow, Error};
+use tower_lsp::lsp_types::{DidChangeTextDocumentParams, Location, Position, Range, Url};
 use typst_syntax::{Source, SyntaxKind};
 
 use crate::backend::Backend;
@@ -20,44 +16,10 @@ pub(crate) trait SymbolTable {
     fn populate_symbol_table(
         &self,
         params: DidChangeTextDocumentParams,
-    ) -> Result<String, anyhow::Error>;
+    ) -> Result<String, Error>;
 }
 
-// typ_logger!(
-//     "inside for loop: node_ctx [slice of String and Location] = {:#?}",
-//     &node_ctx
-// );
-//
-// example output: [only one loop item]
-//
-// inside for loop: node_ctx [slice of String and Location] = (
-//     "footnote[this is a footnote]",
-//     Location {
-//         uri: Url {
-//             scheme: "file",
-//             cannot_be_a_base: false,
-//             username: "",
-//             password: None,
-//             host: None,
-//             port: None,
-//             path: "/home/abhi/docs/just/idea.typ",
-//             query: None,
-//             fragment: None,
-//         },
-//         range: Range {
-//             start: Position {
-//                 line: 19,
-//                 character: 1,
-//             },
-//             end: Position {
-//                 line: 19,
-//                 character: 29,
-//             },
-//         },
-//     },
-// )
-//
-// and the node kind is:
+// the node kind is:
 //
 // FuncCall: 28 [Ident: "footnote", Args: 20 [ContentBlock: 20 [LeftBracket: "[", Markup: 18 [Text: "this is a footnote"], RightBracket: "]"]]]
 impl SymbolTable for Backend {
@@ -66,13 +28,13 @@ impl SymbolTable for Backend {
     fn populate_symbol_table(
         &self,
         params: DidChangeTextDocumentParams,
-    ) -> Result<String, anyhow::Error> {
+    ) -> Result<String, Error> {
         if let Some(ast) = &self.ast_map.get(&params.text_document.uri.to_string()) {
+            let source = ast.value();
             for node in ast.root().children() {
                 if node.kind() == SyntaxKind::FuncCall {
                     // slice out the range of node from ast_map source
                     if let Some(range) = &ast.value().range(node.span()) {
-                        let source = ast.value();
                         let ctx = source
                             .get(range.to_owned())
                             .ok_or(anyhow!("Failed to get ctx of ast from range"))?;
@@ -82,7 +44,7 @@ impl SymbolTable for Backend {
                         let symbol = Symbol {
                             name: ctx.to_owned(),
                             location: loc.clone(),
-                            symbol_type: "function".to_owned(),
+                            symbol_type: SyntaxKind::FuncCall.name().to_owned(),
                         };
                         let symbol_table_re = self
                             .symbol_table
@@ -95,7 +57,8 @@ impl SymbolTable for Backend {
                             Err(_) => continue, // this must do the job
                         }
                     }
-                } else {
+                }
+                if node.kind() == SyntaxKind::Ref {
                     // typ_logger!(
                     //     "Node kind != SyntaxNode::FuncCall, kind = {:?}",
                     //     &node.kind(),
@@ -111,7 +74,7 @@ pub(crate) fn range_to_location(
     uri: Url,
     source: &Source,
     range: &core::ops::Range<usize>,
-) -> Result<Location, anyhow::Error> {
+) -> Result<Location, Error> {
     let (starting_line, starting_char) = (
         source
             .byte_to_line(range.start)
@@ -154,7 +117,7 @@ pub(crate) fn range_to_location(
 pub(crate) fn range_to_lsp_range(
     source: &Source,
     range: &core::ops::Range<usize>,
-) -> Result<Range, anyhow::Error> {
+) -> Result<Range, Error> {
     let (starting_line, starting_char) = (
         source
             .byte_to_line(range.start)
@@ -181,34 +144,4 @@ pub(crate) fn range_to_lsp_range(
             character: ending_char as u32,
         },
     })
-}
-
-impl Backend {
-    pub(crate) fn syntax_error(&self, uri: Url) -> Result<Vec<Diagnostic>, anyhow::Error> {
-        let mut diagnostics: Vec<Diagnostic> = Vec::new();
-        if let Some(ast) = &self.ast_map.get(&uri.to_string()) {
-            for node in ast.root().children() {
-                if node.erroneous() {
-                    let syntax_err = node.errors();
-                    for err in syntax_err {
-                        let span = err.span;
-                        if let Some(range) = &ast.value().range(span) {
-                            let source = ast.value();
-                            let msg = err.message;
-                            let hints = err.hints;
-                            typ_logger!("hints: {:#?}", hints);
-                            diagnostics.push(Diagnostic {
-                                range: range_to_lsp_range(source, range)?,
-                                severity: Some(DiagnosticSeverity::ERROR),
-                                source: Some("typst-analyzer".to_owned()),
-                                message: msg.to_string(),
-                                ..Default::default()
-                            });
-                        }
-                    }
-                }
-            }
-        }
-        Ok(diagnostics)
-    }
 }
