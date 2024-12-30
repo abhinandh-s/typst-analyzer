@@ -21,10 +21,12 @@ impl HandleHover for Backend {
                 position_to_offset(&text, params.text_document_position_params.position)
             {
                 if let Some(ast_map_ctx) = self.ast_map.get(&uri.to_string()) {
+                    let syntaxnode = &ast_map_ctx.value().text();
+                    let parsed = typst_syntax::parse(syntaxnode);
                     // node_walker will walk throug the AST map from cursor position and return
                     // VecDeque as [Markup, Ref, RefMarker] if cursor is in
                     // a RefMarker ie, reference.
-                    let syntax_kind: VecDeque<SyntaxKind> = node_walker(position, &ast_map_ctx);
+                    let syntax_kind: VecDeque<SyntaxKind> = node_walker(position, &parsed);
                     typ_logger!("hovered syntax_kind: {:?}", syntax_kind);
                     let refmarker = syntax_kind.back();
                     if let Some(syntax) = refmarker {

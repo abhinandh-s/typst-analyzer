@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use dashmap::DashMap;
 use tower_lsp::{LspService, Server};
 use typst_analyzer::backend::Backend;
@@ -12,7 +14,7 @@ async fn main() {
         client,
         doc_map: DashMap::new(),
         ast_map: DashMap::new(),
-        symbol_table: DashMap::new(),
+        symbol_table: Arc::new(DashMap::new()),
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

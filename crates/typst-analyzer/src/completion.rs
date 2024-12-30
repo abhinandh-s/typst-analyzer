@@ -22,7 +22,9 @@ impl TypstCompletion for Backend {
         if let Some(text) = self.doc_map.get(&uri) {
             if let Some(position) = position_to_offset(&text, params.position) {
                 if let Some(ast_map_ctx) = self.ast_map.get(&uri) {
-                    let syntax_kind: VecDeque<SyntaxKind> = node_walker(position, &ast_map_ctx);
+                    let syntaxnode = &ast_map_ctx.value().text();
+                    let parsed = typst_syntax::parse(syntaxnode);
+                    let syntax_kind: VecDeque<SyntaxKind> = node_walker(position, &parsed);
                     return generate_completions(syntax_kind.into());
                 }
             }

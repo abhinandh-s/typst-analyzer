@@ -2,7 +2,7 @@
 
 use anyhow::anyhow;
 use tower_lsp::lsp_types::{DidChangeTextDocumentParams, Location, Position, Range, Url};
-use typst_syntax::{Source, SyntaxKind, SyntaxNode};
+use typst_syntax::{Source, SyntaxKind};
 
 use crate::backend::Backend;
 use crate::typ_logger;
@@ -15,153 +15,128 @@ pub struct Symbol {
 }
 
 pub(crate) trait SymbolTable {
-    fn extract_node_ctx(
-        &self,
-        uri: Url,
-        node: &SyntaxNode,
-    ) -> Result<Option<(String, Location)>, anyhow::Error>;
     fn populate_symbol_table(
         &self,
         params: DidChangeTextDocumentParams,
     ) -> Result<String, anyhow::Error>;
 }
 
+// typ_logger!(
+//     "inside for loop: node_ctx [slice of String and Location] = {:#?}",
+//     &node_ctx
+// );
+//
+// example output: [only one loop item]
+//
+// inside for loop: node_ctx [slice of String and Location] = (
+//     "footnote[this is a footnote]",
+//     Location {
+//         uri: Url {
+//             scheme: "file",
+//             cannot_be_a_base: false,
+//             username: "",
+//             password: None,
+//             host: None,
+//             port: None,
+//             path: "/home/abhi/docs/just/idea.typ",
+//             query: None,
+//             fragment: None,
+//         },
+//         range: Range {
+//             start: Position {
+//                 line: 19,
+//                 character: 1,
+//             },
+//             end: Position {
+//                 line: 19,
+//                 character: 29,
+//             },
+//         },
+//     },
+// )
+//
+// and the node kind is:
+//
+// FuncCall: 28 [Ident: "footnote", Args: 20 [ContentBlock: 20 [LeftBracket: "[", Markup: 18 [Text: "this is a footnote"], RightBracket: "]"]]]
 impl SymbolTable for Backend {
-    fn extract_node_ctx(
-        &self,
-        uri: Url,
-        node: &SyntaxNode,
-    ) -> Result<Option<(String, Location)>, anyhow::Error> {
-        let doc = self
-            .doc_map
-            .get(&uri.to_string())
-            .ok_or(anyhow!("Failed to get document ctx"))?;
-
-        if let Some(_text) = self.doc_map.get(&uri.to_string()) {
-            //  typ_logger!("document ctx for symbol_table: {:#?}", &text);
-        }
-        let span = node.span();
-       // typ_logger!("span = {:?}, span_id = {:?}, node = {:?}, node_text = {:?}, node_kind = {:?}",
-       //     &span,
-       //     &span.id(),
-       //     &node,
-       //     &node.text(),
-       //     &node.kind());
-        // -- BUG: i am getting span = Span(1), span_id = None which means the node: &SyntaxNode i provided
-        //         is not pointing into any source file
-        let file_id_re = span.id().ok_or(anyhow!(
-            "Failed to get document file id: span = {:?}, span_id = {:?}, node = {:?}, node_text = {:?}, node_kind = {:?}",
-            &span,
-            &span.id(),
-            &node,
-            &node.text(),
-            &node.kind()
-        ));
-        match file_id_re {
-            Ok(file_id) => {
-                let source = Source::new(file_id, doc.value().to_owned());
-                let range = source
-                    .range(span)
-                    .ok_or(anyhow!("Failed to get range for symbol_table"))?;
-                let ctx = source
-                    .get(range.clone())
-                    .ok_or(anyhow!("Failed to get ctx of ast from range"))?;
-                // typ_logger!("{:#?}", &ctx);
-                let (starting_line, starting_col) = (
-                    source
-                        .byte_to_line(range.start)
-                        .ok_or(anyhow!("Failed to get Location of symbol",))?,
-                    source
-                        .byte_to_column(range.start)
-                        .ok_or(anyhow!("Failed to get Location of symbol",))?,
-                );
-                let (ending_line, ending_col) = (
-                    source
-                        .byte_to_line(range.end)
-                        .ok_or(anyhow!("Failed to get Location of symbol",))?,
-                    source
-                        .byte_to_column(range.end)
-                        .ok_or(anyhow!("Failed to get Location of symbol",))?,
-                );
-                let loc = Location {
-                    uri,
-                    range: Range {
-                        start: Position {
-                            line: starting_line as u32,
-                            character: starting_col as u32,
-                        },
-                        end: Position {
-                            line: ending_line as u32,
-                            character: ending_col as u32,
-                        },
-                    },
-                };
-                Ok(Some((ctx.to_owned(), loc)))
-            }
-            Err(_) => Ok(None),
-        }
-    }
+    // this is a fallible function location is varying from the result we got.
+    // need additional tesing since inaccurate maipping of symbols led messing up users document when we relay on on it
     fn populate_symbol_table(
         &self,
         params: DidChangeTextDocumentParams,
     ) -> Result<String, anyhow::Error> {
-        for enrty_asr in &self.ast_map {
-            typ_logger!(
-                "AST Debugging: URI = {:?}, AST root span = {:?}, AST root span id = {:?}",
-                enrty_asr.key(),
-                enrty_asr.value().span(),
-                enrty_asr.value().span().id()
-            );
-            for i in enrty_asr.value().children() {
-                typ_logger!("children in ast_map: {:?}, span: {:?}, span_id: {:?}", i, i.span(), i.span().id());
-            }
-        }
-
         if let Some(ast) = &self.ast_map.get(&params.text_document.uri.to_string()) {
-           // typ_logger!(
-           //     "AST Debugging: URI = {:?}, AST root span = {:?}",
-           //     params.text_document.uri,
-           //     ast.span()
-           // );
-            for node in ast.children() {
-                // typ_logger!("inside for loop: node = {:?}", &node);
-                if let Some(node_ctx) =
-                    self.extract_node_ctx(params.text_document.uri.clone(), node)?
-                {
-                    //     typ_logger!("inside for loop: node_ctx = {:#?}", &node_ctx);
-                    //   typ_logger!("node in ast childrens: {:?}", node);
-                    if node.kind() == SyntaxKind::FuncCall {
-                        //       typ_logger!("inside node kind = SyntaxNode::FuncCall");
-                        let items = node_ctx;
+            for node in ast.root().children() {
+                if node.kind() == SyntaxKind::FuncCall {
+                    let range = &ast.value().range(node.span());
+                    if let Some(range) = range {
+                        let source = ast.value();
+                        let ctx = source
+                            .get(range.clone())
+                            .ok_or(anyhow!("Failed to get ctx of ast from range"))?;
+                        let loc =
+                            range_to_location(params.text_document.uri.clone(), source, range)?;
+                        typ_logger!("Location {:?}", loc);
                         let symbol = Symbol {
-                            name: items.0,
-                            location: items.1,
+                            name: ctx.to_owned(),
+                            location: loc.clone(),
                             symbol_type: "function".to_owned(),
                         };
-                        self.symbol_table.insert(symbol.name.clone(), symbol);
-                    //     typ_logger!("symbol_table: {:#?}", self.symbol_table);
-                    } else {
-                        //   typ_logger!("not inside node kind = SyntaxNode::FuncCall");
+                        let symbol_table_re = self
+                            .symbol_table
+                            .insert(symbol.name.clone(), symbol)
+                            .ok_or(anyhow!("failed to map symbols into symbol table\n name: {:?}\nLocation: {:?}", ctx, loc));
+                        match symbol_table_re {
+                            Ok(symbol_table) => {
+                                typ_logger!("symbol_table: {:#?}", symbol_table)
+                            }
+                            Err(_) => continue, // this must do the job
+                        }
                     }
+                } else {
+                    typ_logger!(
+                        "Node kind != SyntaxNode::FuncCall, kind = {:?}",
+                        &node.kind(),
+                    );
                 }
             }
         }
-
-       // typ_logger!("symbol_table: started");
-        // get AST of whole document
-
-        // typ_logger!("document ctx for ast_map: {:#?}", &ast);
-
-        // for i in ast.children() {
-        //     typ_logger!(
-        //         "node = {:?}, node_kind = {:?}, node_text = {:?}, span = {:?}",
-        //         i,
-        //         i.kind(),
-        //         i.text(),
-        //         i.span()
-        //     );
-        // }
-
         Ok("this".to_owned())
     }
+}
+
+pub(crate) fn range_to_location(
+    uri: Url,
+    source: &Source,
+    range: &core::ops::Range<usize>,
+) -> Result<Location, anyhow::Error> {
+    let (starting_line, starting_char) = (
+        source
+            .byte_to_line(range.start)
+            .ok_or(anyhow!("Failed to get Location from Source"))?,
+        source
+            .byte_to_column(range.start)
+            .ok_or(anyhow!("Failed to get Location from Source"))?,
+    );
+    let (ending_line, ending_char) = (
+        source
+            .byte_to_line(range.end)
+            .ok_or(anyhow!("Failed to get Location from Source"))?,
+        source
+            .byte_to_column(range.end)
+            .ok_or(anyhow!("Failed to get Location from Source"))?,
+    );
+    Ok(Location {
+        uri,
+        range: Range {
+            start: Position {
+                line: starting_line as u32,
+                character: starting_char as u32,
+            },
+            end: Position {
+                line: ending_line as u32,
+                character: ending_char as u32,
+            },
+        },
+    })
 }

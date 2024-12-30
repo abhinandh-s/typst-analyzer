@@ -2,13 +2,15 @@
 //! AST map. It also contains the implementation of the LanguageServer trait for the Backend
 //! struct.
 
+use std::sync::Arc;
+
 use dashmap::DashMap;
 use serde_json::Value;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 use typst_analyzer_analysis::{calculate_inlay_hints, check_unclosed_delimiters};
-use typst_syntax::SyntaxNode;
+use typst_syntax::{FileId, Source, VirtualPath};
 
 use crate::code_actions::handle::TypstCodeActions;
 use crate::completion::TypstCompletion;
@@ -24,10 +26,13 @@ pub struct Backend {
     pub client: Client,
     // Maps a document URI to its text content
     pub doc_map: DashMap<String, String>,
-    // Maps a document URI to its parsed AST
-    pub ast_map: DashMap<String, SyntaxNode>,
+    // Maping a document URI to its parsed AST of type SyntaxNode is what is have seen in other
+    // lsps but i am maping to to type Source cuz
+    // 1. i can easly parse it to AST
+    // 2, it contains additional metadata (we need ast and span id in some cases)
+    pub ast_map: DashMap<String, Source>,
     // Maps symbol names to Symbol metadata
-    pub symbol_table: DashMap<String, Symbol>,
+    pub symbol_table: Arc<DashMap<String, Symbol>>,
 }
 
 /// Helper function to convert a Position to an offset in the text
@@ -75,14 +80,17 @@ impl Backend {
                     doc_ctx = change.text.clone();
                 }
                 // Update the document with the new content
-                *doc.value_mut() = doc_ctx;
+                *doc.value_mut() = doc_ctx.clone();
+                // Parse the document content to generate the AST
+                if let Some(path_from_uri) = &uri.strip_prefix("file://") {
+                    let ast = Source::new(
+                        FileId::new(None, VirtualPath::new(path_from_uri)),
+                        doc_ctx,
+                    );
+                    // Update the AST map with the new AST
+                    self.ast_map.insert(uri.clone(), ast);
+                }
             }
-            // Parse the document content to generate the AST
-            let ast = typst_syntax::parse(doc.value());
-            // typ_logger!("Document parsed and AST updated: {:?}", &ast);
-
-            // Update the AST map with the new AST
-            self.ast_map.insert(uri, ast);
             // Check for unclosed delimiters
             let diagnostics = check_unclosed_delimiters(&doc);
             // Publish the diagnostics to the client
@@ -277,11 +285,18 @@ impl LanguageServer for Backend {
         let text_document = params.text_document;
         self.doc_map
             .insert(text_document.uri.to_string(), text_document.text.clone());
-        let ast = typst_syntax::parse(&text_document.text);
-        // typ_logger!("Document parsed and AST updated: {:?}", &ast);
 
-        // Update the AST map with the new AST
-        self.ast_map.insert(text_document.uri.to_string(), ast);
+        if let Some(doc) = self.doc_map.get_mut(&text_document.uri.to_string()) {
+            // Update the AST map with the new AST
+            if let Some(path_from_uri) = &text_document.uri.to_string().strip_prefix("file://") {
+                let ast = Source::new(
+                    FileId::new(None, VirtualPath::new(path_from_uri)),
+                    doc.value().to_string(),
+                );
+                // Update the AST map with the new AST
+                self.ast_map.insert(text_document.uri.to_string(), ast);
+            }
+        }
         self.client
             .log_message(
                 MessageType::INFO,
