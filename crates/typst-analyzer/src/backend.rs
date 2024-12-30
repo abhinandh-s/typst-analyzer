@@ -9,7 +9,6 @@ use serde_json::Value;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
-use typst_analyzer_analysis::{calculate_inlay_hints, check_unclosed_delimiters};
 use typst_syntax::{FileId, Source, VirtualPath};
 
 use crate::code_actions::handle::TypstCodeActions;
@@ -89,20 +88,12 @@ impl Backend {
                     self.ast_map.insert(uri.clone(), ast);
                 }
             }
-            // Check for unclosed delimiters
-            let mut diagnostics = check_unclosed_delimiters(&doc);
-            if let Ok(mut missing_labels) =
-                self.missing_label_error(params.text_document.uri.clone())
-            {
-                diagnostics.append(&mut missing_labels);
+            if let Ok(diagnostics) = self.provide_diagnostics(params.text_document.uri.clone()) {
+                // Publish the diagnostics to the client
+                self.client
+                    .publish_diagnostics(params.text_document.uri.clone(), diagnostics, None)
+                    .await;
             }
-            if let Ok(mut syntax_err) = self.syntax_error(params.text_document.uri.clone()) {
-                diagnostics.append(&mut syntax_err);
-            }
-            // Publish the diagnostics to the client
-            self.client
-                .publish_diagnostics(params.text_document.uri.clone(), diagnostics, None)
-                .await;
         }
     }
 }
@@ -241,14 +232,15 @@ impl LanguageServer for Backend {
 
     /// Handle inlay hint requests
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
-        let uri = params.text_document.uri.to_string();
-        if let Some(doc) = self.doc_map.get(&uri) {
-            return match calculate_inlay_hints(&doc) {
-                Ok(hints) => Ok(Some(hints)),
-                Err(_) => Ok(None),
-            };
-        }
-        Ok(None)
+        let uri = params.text_document.uri;
+        let re = self.provide_hints(uri);
+        // if let Some(doc) = self.doc_map.get(&uri) {
+        return match re {
+            Ok(hints) => Ok(Some(hints)),
+            Err(_) => Ok(None),
+        };
+        // }
+        // Ok(None)
     }
 
     /// Handle code action requests
@@ -288,7 +280,7 @@ impl LanguageServer for Backend {
 
     /// Handle did open requests
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let text_document = params.text_document;
+        let text_document = params.text_document.clone();
         self.doc_map
             .insert(text_document.uri.to_string(), text_document.text.clone());
 
@@ -302,6 +294,12 @@ impl LanguageServer for Backend {
                 // Update the AST map with the new AST
                 self.ast_map.insert(text_document.uri.to_string(), ast);
             }
+        }
+        if let Ok(diagnostics) = self.provide_diagnostics(params.text_document.uri.clone()) {
+            // Publish the diagnostics to the client
+            self.client
+                .publish_diagnostics(params.text_document.uri.clone(), diagnostics, None)
+                .await;
         }
         self.client
             .log_message(

@@ -312,10 +312,7 @@ impl Backend {
     }
 
     // Handle the execution of the custom command
-    pub async fn execute_custom_command(
-        &self,
-        params: ExecuteCommandParams,
-    ) -> Result<(), Error> {
+    pub async fn execute_custom_command(&self, params: ExecuteCommandParams) -> Result<(), Error> {
         if params.command == "customCommand" {
             println!("Running custom function...");
             // Replace this with actual custom logic, e.g., custom function call

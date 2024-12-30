@@ -4,7 +4,7 @@ use typst_syntax::{Source, SyntaxKind};
 
 use crate::backend::Backend;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Symbol {
     pub name: String,            // Symbol's name (e.g., function name)
     pub location: Location,      // Where the symbol is in the document
@@ -119,11 +119,12 @@ impl SymbolTable for Backend {
     }
 }
 
-impl Backend {
-    
-}
+impl Backend {}
 
-pub(crate) fn find_missing_items<T: Eq + std::hash::Hash + Clone>(vec1: &[T], vec2: &[T]) -> Vec<T> {
+pub(crate) fn find_missing_items<T: Eq + std::hash::Hash + Clone>(
+    vec1: &[T],
+    vec2: &[T],
+) -> Vec<T> {
     // Convert vec2 to a HashSet for quick lookups
     let set2: std::collections::HashSet<_> = vec2.iter().cloned().collect();
 

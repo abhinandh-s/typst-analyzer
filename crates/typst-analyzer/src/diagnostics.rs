@@ -1,7 +1,5 @@
 use anyhow::{anyhow, Error};
-use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Url,
-};
+use tower_lsp::lsp_types::{Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Url};
 use typst_syntax::SyntaxKind;
 
 use crate::backend::Backend;
@@ -9,6 +7,18 @@ use crate::symbols::{find_missing_items, range_to_location, range_to_lsp_range, 
 use crate::typ_logger;
 
 impl Backend {
+    pub(crate) fn provide_diagnostics(&self, uri: Url) -> Result<Vec<Diagnostic>, Error> {
+        // Check for unclosed delimiters
+        let mut diagnostics = Vec::new(); // check_unclosed_delimiters(&doc);
+        if let Ok(mut missing_labels) = self.missing_label_error(uri.clone()) {
+            diagnostics.append(&mut missing_labels);
+        }
+        if let Ok(mut syntax_err) = self.syntax_error(uri.clone()) {
+            diagnostics.append(&mut syntax_err);
+        }
+        Ok(diagnostics)
+    }
+
     pub(crate) fn syntax_error(&self, uri: Url) -> Result<Vec<Diagnostic>, Error> {
         let mut diagnostics: Vec<Diagnostic> = Vec::new();
         if let Some(ast) = &self.ast_map.get(&uri.to_string()) {
@@ -56,6 +66,7 @@ impl Backend {
         let mut ast_labels = Vec::new();
         let mut ast_references = Vec::new();
         let binding = self.ast_map.get(&uri.to_string());
+
         if let Some(ast) = &binding {
             let source = ast.value();
             for node in ast.root().children() {
@@ -65,7 +76,6 @@ impl Backend {
                         let ctx = source
                             .get(range.to_owned())
                             .ok_or(anyhow!("Failed to get ctx of ast from range"))?;
-                        let _loc = range_to_location(uri.clone(), source, range)?;
                         let label = ctx
                             .strip_prefix("<")
                             .ok_or(anyhow!("failed to strip symbols"))?
@@ -97,17 +107,15 @@ impl Backend {
             }
 
             let missing = find_missing_items(&ast_references, &ast_labels);
-            for s in &symbol_vec {
-                for i in &missing {
-                    if s.name == *i {
-                        diagnostic_item.push(Diagnostic {
-                            range: s.location.range,
-                            severity: Some(DiagnosticSeverity::ERROR),
-                            source: Some("typst-analyzer".to_owned()),
-                            message: "reference is missing label".to_owned(),
-                            ..Default::default()
-                        });
-                    }
+            for symbol in &symbol_vec {
+                if missing.contains(&symbol.name.as_str()) {
+                    diagnostic_item.push(Diagnostic {
+                        range: symbol.location.range,
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        source: Some("typst-analyzer".to_owned()),
+                        message: "reference is missing label".to_owned(),
+                        ..Default::default()
+                    });
                 }
             }
         }
