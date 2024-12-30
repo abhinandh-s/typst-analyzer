@@ -83,16 +83,17 @@ impl Backend {
                 *doc.value_mut() = doc_ctx.clone();
                 // Parse the document content to generate the AST
                 if let Some(path_from_uri) = &uri.strip_prefix("file://") {
-                    let ast = Source::new(
-                        FileId::new(None, VirtualPath::new(path_from_uri)),
-                        doc_ctx,
-                    );
+                    let ast =
+                        Source::new(FileId::new(None, VirtualPath::new(path_from_uri)), doc_ctx);
                     // Update the AST map with the new AST
                     self.ast_map.insert(uri.clone(), ast);
                 }
             }
             // Check for unclosed delimiters
-            let diagnostics = check_unclosed_delimiters(&doc);
+            let mut diagnostics = check_unclosed_delimiters(&doc);
+            if let Ok(mut syntax_err) = self.syntax_error(params.text_document.uri.clone()) {
+            diagnostics.append(&mut syntax_err);
+            }
             // Publish the diagnostics to the client
             self.client
                 .publish_diagnostics(params.text_document.uri.clone(), diagnostics, None)

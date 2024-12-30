@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 
 use anyhow::anyhow;
-use tower_lsp::lsp_types::{DidChangeTextDocumentParams, Location, Position, Range, Url};
+use tower_lsp::lsp_types::{
+    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, Location, Position, Range, Url,
+};
 use typst_syntax::{Source, SyntaxKind};
 
 use crate::backend::Backend;
@@ -68,11 +70,11 @@ impl SymbolTable for Backend {
         if let Some(ast) = &self.ast_map.get(&params.text_document.uri.to_string()) {
             for node in ast.root().children() {
                 if node.kind() == SyntaxKind::FuncCall {
-                    let range = &ast.value().range(node.span());
-                    if let Some(range) = range {
+                    // slice out the range of node from ast_map source
+                    if let Some(range) = &ast.value().range(node.span()) {
                         let source = ast.value();
                         let ctx = source
-                            .get(range.clone())
+                            .get(range.to_owned())
                             .ok_or(anyhow!("Failed to get ctx of ast from range"))?;
                         let loc =
                             range_to_location(params.text_document.uri.clone(), source, range)?;
@@ -94,14 +96,14 @@ impl SymbolTable for Backend {
                         }
                     }
                 } else {
-                    typ_logger!(
-                        "Node kind != SyntaxNode::FuncCall, kind = {:?}",
-                        &node.kind(),
-                    );
+                    // typ_logger!(
+                    //     "Node kind != SyntaxNode::FuncCall, kind = {:?}",
+                    //     &node.kind(),
+                    // );
                 }
             }
         }
-        Ok("this".to_owned())
+        Ok("dummy_text".to_owned())
     }
 }
 
@@ -139,4 +141,74 @@ pub(crate) fn range_to_location(
             },
         },
     })
+}
+
+//pub(crate) fn range_to_position(
+//    range: &core::ops::Range<usize>,
+//) -> Result<Position, anyhow::Error> {
+//    Ok(Position {
+//        line: todo!(),
+//        character: todo!(),
+//    })
+//}
+pub(crate) fn range_to_lsp_range(
+    source: &Source,
+    range: &core::ops::Range<usize>,
+) -> Result<Range, anyhow::Error> {
+    let (starting_line, starting_char) = (
+        source
+            .byte_to_line(range.start)
+            .ok_or(anyhow!("Failed to get Range from Source"))?,
+        source
+            .byte_to_column(range.start)
+            .ok_or(anyhow!("Failed to get Range from Source"))?,
+    );
+    let (ending_line, ending_char) = (
+        source
+            .byte_to_line(range.end)
+            .ok_or(anyhow!("Failed to get Range from Source"))?,
+        source
+            .byte_to_column(range.end)
+            .ok_or(anyhow!("Failed to get Range from Source"))?,
+    );
+    Ok(Range {
+        start: Position {
+            line: starting_line as u32,
+            character: starting_char as u32,
+        },
+        end: Position {
+            line: ending_line as u32,
+            character: ending_char as u32,
+        },
+    })
+}
+
+impl Backend {
+    pub(crate) fn syntax_error(&self, uri: Url) -> Result<Vec<Diagnostic>, anyhow::Error> {
+        let mut diagnostics: Vec<Diagnostic> = Vec::new();
+        if let Some(ast) = &self.ast_map.get(&uri.to_string()) {
+            for node in ast.root().children() {
+                if node.erroneous() {
+                    let syntax_err = node.errors();
+                    for err in syntax_err {
+                        let span = err.span;
+                        if let Some(range) = &ast.value().range(span) {
+                            let source = ast.value();
+                            let msg = err.message;
+                            let hints = err.hints;
+                            typ_logger!("hints: {:#?}", hints);
+                            diagnostics.push(Diagnostic {
+                                range: range_to_lsp_range(source, range)?,
+                                severity: Some(DiagnosticSeverity::ERROR),
+                                source: Some("typst-analyzer".to_owned()),
+                                message: msg.to_string(),
+                                ..Default::default()
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        Ok(diagnostics)
+    }
 }
