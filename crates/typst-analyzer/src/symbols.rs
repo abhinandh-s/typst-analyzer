@@ -111,10 +111,10 @@ impl SymbolTable for Backend {
             }
         }
 
-        typ_logger!("symbol table: {:#?}", symbol_vec);
-        typ_logger!("labels: {:#?}", ast_labels);
-        typ_logger!("references: {:#?}", ast_references);
-        typ_logger!("missing: {:#?}", missing);
+       // typ_logger!("symbol table: {:#?}", symbol_vec);
+       // typ_logger!("labels: {:#?}", ast_labels);
+       // typ_logger!("references: {:#?}", ast_references);
+       // typ_logger!("missing: {:#?}", missing);
         Ok(diagnostic_item)
     }
 }

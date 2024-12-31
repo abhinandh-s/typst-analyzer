@@ -31,7 +31,7 @@ pub struct Backend {
     // 2, it contains additional metadata (we need ast and span id in some cases)
     pub ast_map: DashMap<String, Source>,
     // Maps symbol names to Symbol metadata
-    pub symbol_table: Arc<DashMap<String, Symbol>>,
+    pub symbol_table: Arc<DashMap<String, Symbol>>, // WIP!
 }
 
 /// Helper function to convert a Position to an offset in the text

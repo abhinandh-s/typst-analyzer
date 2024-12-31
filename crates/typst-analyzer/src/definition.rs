@@ -1,13 +1,11 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{
-    GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range, Url,
+    GotoDefinitionParams, GotoDefinitionResponse, Location, Url,
 };
-use typst_analyzer_analysis::node::node_walker;
 use typst_syntax::SyntaxKind;
 
-use crate::backend::{position_to_offset, Backend};
-use crate::error_ctx::TypError;
+use crate::backend::Backend;
 use crate::prelude::*;
 use crate::symbols::range_to_location;
 
@@ -25,32 +23,22 @@ impl HandleDefinitions for Backend {
     ) -> Result<GotoDefinitionResponse, Error> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        
-        while let Ok(pos) = self.definitions(uri.clone()) {
 
+        if let Ok(definitions) = self.definitions(uri.clone()) {
+            for def in definitions {
+                if pos >= def.location.range.start && pos <= def.location.range.end {
+                    typ_logger!("{:#?}", &def);
+                    return Ok(def.response);
+                }
+            }
         }
-
-        // let line_start = 
-        // dummy return
-        Ok(GotoDefinitionResponse::Scalar(Location {
-            uri,
-            range: Range {
-                start: Position {
-                    line: 1,
-                    character: 4,
-                },
-                end: Position {
-                    line: 1,
-                    character: 4,
-                },
-            },
-        }))
+        Err(anyhow!("cant find definitions"))
     }
 }
 
 #[derive(Debug)]
 pub struct DefinitionsMaker {
-    pub range: Range,
+    pub location: Location,
     pub response: GotoDefinitionResponse,
 }
 
@@ -98,7 +86,7 @@ impl Backend {
             if let Some(loc) = ast_labels.get(k) {
                 // definitions.push(GotoDefinitionResponse::Scalar(loc.to_owned()));
                 definitions.push(DefinitionsMaker {
-                    range: v.range,
+                    location: v,
                     response: GotoDefinitionResponse::Scalar(loc.to_owned()),
                 });
             }
