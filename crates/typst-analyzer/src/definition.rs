@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use tower_lsp::lsp_types::{
-    GotoDefinitionParams, GotoDefinitionResponse, Location, Url,
-};
+use tower_lsp::lsp_types::{GotoDefinitionParams, GotoDefinitionResponse, Location, Url};
 use typst_syntax::SyntaxKind;
 
 use crate::backend::Backend;

@@ -11,3 +11,5 @@ pub mod node;
 pub use completion::resources::*;
 pub use diagnostics::handle::*;
 pub use hints::handle::*;
+
+pub(crate) type OkSome<T> = Result<Option<T>, anyhow::Error>;

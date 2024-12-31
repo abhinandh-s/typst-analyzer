@@ -6,7 +6,7 @@ A Language Server for [Typst](https://typst.app/).
 
 ## Overview
 
-Typst-Analyzer is a Language Server Protocol (LSP) implementation designed for the Typst typesetting system. It aims to provide insights and tools for developers working with Typst files.
+Typst-Analyzer is a Language Server Protocol (LSP) implementation designed for the Typst typesetting system.
 
 > [!WARNING]
 > This project is a work in progress and lacks most essential features. It currently serves more as a study resource for those learning about LSP development.
@@ -40,10 +40,6 @@ Typst-Analyzer is a Language Server Protocol (LSP) implementation designed for t
    ```sh
    cargo build --release
    ```
-
-## Running the Language Server
-
-put the compiled binary in $PATH and then you can configure your editor to connect to this server using an LSP client.
 
 ## Contributing
 

@@ -5,7 +5,7 @@ use anyhow::Error;
 use tower_lsp::lsp_types::{CompletionItem, TextDocumentPositionParams};
 use typst_analyzer_analysis::completion::generate_completions;
 use typst_analyzer_analysis::node::node_walker;
-use typst_syntax::SyntaxKind;
+use typst_syntax::LinkedNode;
 
 pub(crate) trait TypstCompletion {
     fn handle_completions(
@@ -25,8 +25,8 @@ impl TypstCompletion for Backend {
                 if let Some(ast_map_ctx) = self.ast_map.get(&uri) {
                     let syntaxnode = &ast_map_ctx.value().text();
                     let parsed = typst_syntax::parse(syntaxnode);
-                    let syntax_kind: VecDeque<SyntaxKind> = node_walker(position, &parsed);
-                    return generate_completions(syntax_kind.into());
+                    let linked_node: VecDeque<LinkedNode> = node_walker(position, &parsed);
+                    return generate_completions(linked_node.into());
                 }
             }
         }

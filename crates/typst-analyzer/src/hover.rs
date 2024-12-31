@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use anyhow::Error;
 use tower_lsp::lsp_types::{Hover, HoverContents, HoverParams, MarkupContent, MarkupKind};
-use typst_analyzer_analysis::node::node_walker;
+use typst_analyzer_analysis::node::kind_walker;
 use typst_syntax::SyntaxKind;
 
 use crate::backend::{position_to_offset, Backend};
@@ -27,7 +27,7 @@ impl HandleHover for Backend {
                     // node_walker will walk throug the AST map from cursor position and return
                     // VecDeque as [Markup, Ref, RefMarker] if cursor is in
                     // a RefMarker ie, reference.
-                    let syntax_kind: VecDeque<SyntaxKind> = node_walker(position, &parsed);
+                    let syntax_kind: VecDeque<SyntaxKind> = kind_walker(position, &parsed);
                     typ_logger!("hovered syntax_kind: {:?}", syntax_kind);
                     let refmarker = syntax_kind.back();
                     if let Some(syntax) = refmarker {

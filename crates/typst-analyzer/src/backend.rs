@@ -113,6 +113,7 @@ impl LanguageServer for Backend {
         Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {
+                document_formatting_provider: Some(OneOf::Left(true)),
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 definition_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
@@ -193,6 +194,13 @@ impl LanguageServer for Backend {
         &self,
         _params: FoldingRangeParams,
     ) -> Result<Option<Vec<FoldingRange>>> {
+        Ok(None)
+    }
+
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        if let Ok(Some(ctx)) = self.handle_formatting(params.text_document.uri) {
+            return Ok(Some(ctx));
+        }
         Ok(None)
     }
 
