@@ -33,7 +33,7 @@ impl Backend {
 
     pub fn format_text_document(&self, uri: Url) -> Option<String> {
         let binding = self.ast_map.get(&uri.to_string());
-
+        // -- TODO: change default config and provide config file to user
         let config = typstyle_core::Config::default();
         let formatter = typstyle_core::Typstyle::new(config);
 

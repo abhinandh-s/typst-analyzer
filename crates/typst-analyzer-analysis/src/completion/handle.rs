@@ -1,8 +1,10 @@
 use tower_lsp::lsp_types::*;
 use typst_syntax::{LinkedNode, SyntaxKind};
 
+use crate::typ_logger;
+
 use super::fonts::get_fonts;
-use super::{code, markup};
+use super::{code, markup, snippets};
 
 pub fn generate_completions(
     context: Vec<LinkedNode>,
@@ -11,12 +13,27 @@ pub fn generate_completions(
     let mut completions: Vec<CompletionItem> = vec![];
     for node in context {
         // Check all possible patterns and add relevant completions
+        //
+        // A FuncCall can contain Parameters there args and actual markup content
+        // but it cat also contain other FuncCall
+        //
+        // #emph(    <- FuncCall
+        //   text(      <- FuncCall and Args
+        //      fallback: true     <- Named
+        //   )[     <- ContentBlock
+        //      With a function call.   <- Markup
+        //   ],
+        // )
         if node.kind() == SyntaxKind::FuncCall {
-            completions.append(&mut markup::cmp_items());
+            typ_logger!("inside FuncCall, FuncCall: {:?}", node);
             for child in node.children() {
+                //     // typ_logger!("inside text, text: {:?}", child);
                 if child.text() == "text" && child.kind() == SyntaxKind::Ident {
                     completions.append(&mut typ_text_func_cmp());
                 }
+                //     if child.kind() == SyntaxKind::Args {
+                //         typ_logger!("inside args, args: {:?}", child);
+                //     }
             }
         }
 
@@ -28,17 +45,15 @@ pub fn generate_completions(
             completions.append(&mut typ_comments_cmp());
             completions.append(&mut typ_fonts_cmp());
         }
-
-        if node.kind() == SyntaxKind::Markup {
-            completions.append(&mut markup::cmp_items());
-            completions.append(&mut markup::typ_image_cmp()?);
-            completions.append(&mut code::constructors());
+        if node.kind() == SyntaxKind::Bool {
+            completions.append(&mut typ_comments_cmp());
         }
-
-        if node.kind() == SyntaxKind::Equation {
-            completions.append(&mut markup::cmp_items());
-        }
+        if node.kind() == SyntaxKind::Markup {}
     }
+    completions.append(&mut snippets::cmp_items());
+    completions.append(&mut markup::cmp_items());
+    completions.append(&mut markup::typ_image_cmp()?);
+    completions.append(&mut code::constructors());
     Ok(completions)
 }
 // Generate completion items based on the context (node type)
