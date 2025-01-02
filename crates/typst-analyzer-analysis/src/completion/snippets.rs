@@ -1,3 +1,4 @@
+use std::env::current_dir;
 use std::fs::{self, write};
 
 use dirs::config_dir;
@@ -122,15 +123,25 @@ fn load_user_snippets() -> Option<Vec<UserSnippet>> {
                 Err(err) => typ_logger!("error: {}", err),
             }
         }
-        let snippets_config_file = typst_analyzer_config_dir.join("snippets.yml");
-        if !snippets_config_file.exists() {
-            let re = write(&snippets_config_file, yml_ctx);
+        let global_snippets = typst_analyzer_config_dir.join("snippets.yml");
+        if !global_snippets.exists() {
+            let re = write(&global_snippets, yml_ctx);
             match re {
                 Ok(_) => typ_logger!("info: written snippets config file."),
                 Err(err) => typ_logger!("error: {}", err),
             }
         }
-        if let Ok(content) = std::fs::read_to_string(snippets_config_file) {
+        let snippets = if let Ok(c_dir) = current_dir() {
+            let local_snippets = c_dir.join("snippets.yml");
+            if local_snippets.exists() {
+                local_snippets
+            } else {
+                global_snippets
+            }
+        } else {
+            global_snippets
+        };
+        if let Ok(content) = std::fs::read_to_string(snippets) {
             let snippet_file: Result<SnippetFile, serde_yml::Error> = serde_yml::from_str(&content);
             if let Ok(snippets) = snippet_file {
                 let items = snippets.snippets;
