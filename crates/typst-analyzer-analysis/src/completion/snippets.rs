@@ -1,4 +1,10 @@
+use std::fs::{self, write};
+
+use dirs::config_dir;
+use serde::Deserialize;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind};
+
+use crate::typ_logger;
 
 use super::generic::TypCmpItem;
 
@@ -8,13 +14,13 @@ pub fn cmp_items() -> Vec<CompletionItem> {
     items
 }
 
-struct SnippetMaker<'a> {
-    label: &'a str,
-    details: &'a str,
+struct SnippetMaker {
+    label: String,
+    details: String,
     insert_text: String,
 }
 
-fn snips_time() -> Vec<SnippetMaker<'static>> {
+fn snips_time() -> Vec<SnippetMaker> {
     let mut snip = Vec::new();
     let current_time = chrono::Local::now();
     let (year, month, day, hour, min, sec) = (
@@ -26,24 +32,24 @@ fn snips_time() -> Vec<SnippetMaker<'static>> {
         current_time.format("%S").to_string(),
     );
     snip.push(SnippetMaker {
-        label: "date",
-        details: "Insert current date",
+        label: "date".to_owned(),
+        details: "Insert current date".to_owned(),
         insert_text: format!(
             "#datetime(\n  year: {},\n  month: {},\n  day: {},\n).display()",
             year, month, day
         ),
     });
     snip.push(SnippetMaker {
-        label: "time",
-        details: "Insert current time",
+        label: "time".to_owned(),
+        details: "Insert current time".to_owned(),
         insert_text: format!(
             "#datetime(\n  hour: {},\n  minute: {},\n  second: {},\n).display()",
             hour, min, sec
         ),
     });
     snip.push(SnippetMaker {
-        label: "datetime",
-        details: "Insert current date and time",
+        label: "datetime".to_owned(),
+        details: "Insert current date and time".to_owned(),
         insert_text: format!(
             "#datetime(\n  year: {},\n  month: {},\n  day: {},\n  hour: {},\n  minute: {},\n  second: {},\n).display()",
             year, month, day,
@@ -59,6 +65,13 @@ fn constructors() -> Vec<CompletionItem> {
 
     let mut constructor = snips_time();
     constructor.append(&mut snips_set_items());
+    match snips_from_yaml() {
+        Some(mut user_snips) => {
+            constructor.append(&mut user_snips);
+        }
+        None => typ_logger!("can't find snippets"),
+    }
+
     for ctx in constructor {
         let item = TypCmpItem {
             label: ctx.label.to_owned(),
@@ -72,16 +85,74 @@ fn constructors() -> Vec<CompletionItem> {
     TypCmpItem::get_cmp(items)
 }
 
-fn snips_set_items() -> Vec<SnippetMaker<'static>> {
+fn snips_set_items() -> Vec<SnippetMaker> {
     vec![
     SnippetMaker {
-        label: "set_par",
-        details: "Insert current date",
+        label: "set_par".to_owned(),
+        details: "Insert current date".to_owned(),
         insert_text: "#set par(\n  leading: 0.65em,\n  first-line-indent: 1em,\n  spacing: 1.2em,\n  justify: true,\n)".to_owned(),
     },
     SnippetMaker {
-        label: "set_par_line",
-        details: "Insert current date",
+        label: "set_par_line".to_owned(),
+        details: "Insert current date".to_owned(),
         insert_text: "#set par.line(numbering: \"1\")".to_owned(),
     }]
+}
+
+#[derive(Deserialize, Debug)]
+struct UserSnippet {
+    label: String,
+    details: String,
+    insert_text: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct SnippetFile {
+    snippets: Vec<UserSnippet>,
+}
+
+fn load_user_snippets() -> Option<Vec<UserSnippet>> {
+    let yml_ctx = "snippets:\n  - label: \"custom_date\"\n    details: \"Insert a custom date snippet\"\n    insert_text: \"#date(year: 2025, month: 1, day: 1)\"\n  - label: \"custom_time\"\n    details: \"Insert a custom time snippet\"\n    insert_text: \"#time(hour: 12, minute: 30, second: 45)\""
+        .to_owned();
+    if let Some(config_dir) = config_dir() {
+        let typst_analyzer_config_dir = config_dir.join("typst-analyzer");
+        if !typst_analyzer_config_dir.exists() {
+            match fs::create_dir_all(typst_analyzer_config_dir.clone()) {
+                Ok(_) => typ_logger!("info: created config dir."),
+                Err(err) => typ_logger!("error: {}", err),
+            }
+        }
+        let snippets_config_file = typst_analyzer_config_dir.join("snippets.yml");
+        if !snippets_config_file.exists() {
+            let re = write(&snippets_config_file, yml_ctx);
+            match re {
+                Ok(_) => typ_logger!("info: written snippets config file."),
+                Err(err) => typ_logger!("error: {}", err),
+            }
+        }
+        if let Ok(content) = std::fs::read_to_string(snippets_config_file) {
+            let snippet_file: Result<SnippetFile, serde_yml::Error> = serde_yml::from_str(&content);
+            if let Ok(snippets) = snippet_file {
+                let items = snippets.snippets;
+                return Some(items);
+            }
+        }
+    }
+    None
+}
+
+/// serialize the user defined snippets in to SnippetMaker
+fn snips_from_yaml() -> Option<Vec<SnippetMaker>> {
+    let mut serialized_snippets = Vec::new();
+    if let Some(user_snippets) = load_user_snippets() {
+        for snip in user_snippets {
+            serialized_snippets.push(SnippetMaker {
+                label: snip.label,
+                details: snip.details,
+                insert_text: snip.insert_text,
+            });
+        }
+        return Some(serialized_snippets);
+    }
+    None
 }

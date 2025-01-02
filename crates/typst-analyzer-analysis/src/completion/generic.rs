@@ -26,7 +26,7 @@ pub struct TypCmpItem<'a> {
     pub label: String,
     pub label_details: &'a str,
     pub kind: CompletionItemKind,
-    pub documentation: &'a str,
+    pub documentation: String,
     pub insert_text: String,
 }
 
@@ -35,7 +35,7 @@ impl<'a> TypCmpItem<'a> {
         label: String,
         label_details: &'a str,
         kind: CompletionItemKind,
-        documentation: &'a str,
+        documentation: String,
         insert_text: String,
     ) -> Self {
         Self {

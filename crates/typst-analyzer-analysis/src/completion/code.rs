@@ -31,7 +31,7 @@ To customize the appearance of the entry in the footnote listing, see [footnote.
             label: ctx.1.to_owned(),
             label_details: "code",
             kind: CompletionItemKind::FUNCTION,
-            documentation: ctx.0,
+            documentation: ctx.0.to_owned(),
             insert_text: ctx.2.to_owned(),
         };
         items.push(item);
@@ -99,7 +99,7 @@ impl<'a> CodeModeItems<'a> {
                 label: item.label,
                 label_details: "code",
                 kind: CompletionItemKind::FUNCTION,
-                documentation: item.label_details,
+                documentation: item.label_details.to_owned(),
                 insert_text: item.insert_text,
             };
             cmpitem.push(cmp);
@@ -114,7 +114,7 @@ fn code_mode_ctx() -> Result<Vec<CompletionItem>, anyhow::Error> {
         "line".to_owned(),
         "A line from one point to another.",
         CompletionItemKind::FUNCTION,
-        "A line from one point to another.",
+        "A line from one point to another.".to_owned(),
         "#line(length: ${1:100}%, stroke: (paint: rgb(\"#757575\"), thickness: 0.1pt))".to_owned(),
     );
 
@@ -129,7 +129,7 @@ fn code_mode_ctx() -> Result<Vec<CompletionItem>, anyhow::Error> {
             label: ctx.1.to_owned(),
             label_details: "code",
             kind: CompletionItemKind::FUNCTION,
-            documentation: ctx.0,
+            documentation: ctx.0.to_owned(),
             insert_text: ctx.2.to_owned(),
         };
         items.push(item);

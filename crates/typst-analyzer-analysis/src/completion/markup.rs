@@ -74,7 +74,7 @@ fn constructors() -> Vec<CompletionItem> {
             label: ctx.1.to_owned(),
             label_details: "markup",
             kind: CompletionItemKind::CONSTRUCTOR,
-            documentation: ctx.0,
+            documentation: ctx.0.to_owned(),
             insert_text: ctx.2.to_owned(),
         };
         items.push(item);
@@ -149,7 +149,7 @@ pub fn typ_image_cmp() -> Result<Vec<CompletionItem>, anyhow::Error> {
             label: "image".to_owned(),
             label_details: "markup",
             kind: CompletionItemKind::FILE,
-            documentation: "Image",
+            documentation: "Image".to_owned(),
             insert_text: format!("#image(\"{}\", width: 100%)", image),
         };
         typ_logger!("image: {}", image);

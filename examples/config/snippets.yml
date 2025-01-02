@@ -1,0 +1,14 @@
+snippets:
+  - label: "custom_line"
+    details: "Insert a thin line"
+    insert_text: | 
+      #line(
+        length: ${1:100}%,
+        stroke: (
+          paint: rgb("#757575"),
+          thickness: 0.1pt,
+        )
+      )
+  - label: "custom_time"
+    details: "Insert a custom time snippet"
+    insert_text: "#time(hour: 12, minute: 30, second: 45)"
