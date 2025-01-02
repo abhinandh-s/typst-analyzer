@@ -1,3 +1,8 @@
+# YAML is the best option here since we don't need to worry about escape characters and indentation.
+# YAML will preserve indentation if we use the `|` symbol.
+# The `1` in ${1:100} specifies the cursor position after the insertion of the snippet,
+# and the 100 is a placeholder text (a hint for the user on what value to input there). 
+# We can also add a default value if needed.
 snippets:
   - label: "custom_line"
     details: "Insert a thin line"
