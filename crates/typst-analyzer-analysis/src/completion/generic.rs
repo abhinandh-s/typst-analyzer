@@ -68,7 +68,7 @@ impl<'a> TypCmpItem<'a> {
     ///         label: "bold".to_owned(),
     ///         label_details: "text formatting",
     ///         kind: CompletionItemKind::SNIPPET,
-    ///         documentation: "Make text bold using `*bold*`.",
+    ///         documentation: "Make text bold using `*bold*`.".to_owned(),
     ///         insert_text: "*${1:Text}*".to_owned(),
     ///     }
     /// ];

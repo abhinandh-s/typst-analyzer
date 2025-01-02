@@ -3,6 +3,6 @@ pub mod fonts;
 pub mod generic;
 mod handle;
 pub mod markup;
-pub mod snippets;
 pub(crate) mod resources;
+pub mod snippets;
 pub use handle::*;
