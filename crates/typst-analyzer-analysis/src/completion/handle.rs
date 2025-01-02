@@ -38,28 +38,27 @@ pub fn generate_completions(
         }
 
         if node.kind() == SyntaxKind::LineComment {
-            completions.append(&mut typ_comments_cmp());
+            completions.append(&mut collect_comments_cmp());
         }
 
         if node.kind() == SyntaxKind::BlockComment {
-            completions.append(&mut typ_comments_cmp());
-            completions.append(&mut typ_fonts_cmp());
+            completions.append(&mut collect_comments_cmp());
+            completions.append(&mut collect_fonts_cmp());
         }
         if node.kind() == SyntaxKind::Bool {
-            completions.append(&mut typ_comments_cmp());
+            completions.append(&mut collect_comments_cmp());
         }
         if node.kind() == SyntaxKind::Markup {}
     }
-    completions.append(&mut snippets::cmp_items());
-    completions.append(&mut markup::cmp_items());
-    completions.append(&mut markup::typ_image_cmp()?);
-    completions.append(&mut code::constructors());
+    completions.append(&mut snippets::collect());
+    if let Ok(mut markup_cmp) = markup::collect() {
+        completions.append(&mut markup_cmp)
+    }
+    completions.append(&mut code::collect());
     Ok(completions)
 }
 // Generate completion items based on the context (node type)
-fn typ_comments_cmp() -> Vec<CompletionItem> {
-    let mut items = Vec::new();
-
+fn collect_comments_cmp() -> Vec<CompletionItem> {
     let comment_ctx = vec![
         ("TODO: ", "todo", "Task comment"),
         ("NOTE: ", "note", "Task comment"),
@@ -67,17 +66,17 @@ fn typ_comments_cmp() -> Vec<CompletionItem> {
         ("BUG: ", "bug", "Task comment"),
         ("TEST: ", "test", "Task comment"),
     ];
-    // Add more specific completions based on the node kind
-    for (insert_text, label, detail) in comment_ctx {
-        items.push(CompletionItem {
+
+    comment_ctx
+        .into_iter()
+        .map(|(insert_text, label, detail)| CompletionItem {
             label: label.to_owned(),
             kind: Some(CompletionItemKind::TEXT),
             detail: Some(detail.to_owned()),
             insert_text: Some(insert_text.to_owned()),
             ..Default::default()
-        });
-    }
-    items
+        })
+        .collect()
 }
 
 /// # font [ str or array ]
@@ -95,7 +94,7 @@ fn typ_comments_cmp() -> Vec<CompletionItem> {
 ///   "Noto Sans Arabic",
 /// ))
 /// ```
-fn typ_fonts_cmp() -> Vec<CompletionItem> {
+fn collect_fonts_cmp() -> Vec<CompletionItem> {
     let mut items = Vec::new();
     // Add more specific completions based on the node kind
     if let Ok(Some(comment_ctx)) = get_fonts() {

@@ -30,17 +30,19 @@
 
 use std::collections::HashMap;
 
+use anyhow::Error;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, InsertTextFormat, MarkupContent};
 
 use crate::{get_images, typ_logger};
 
-use super::generic::TypCmpItem;
+use super::core::TypCmpItem;
 
-pub fn cmp_items() -> Vec<CompletionItem> {
+pub fn collect() -> Result<Vec<CompletionItem>, Error> {
     let mut items = Vec::new();
-    items.append(&mut headers());
+    items.append(&mut collect_headers());
     items.append(&mut constructors());
-    items
+    items.append(&mut collect_image_cmp()?);
+    Ok(items)
 }
 
 fn constructors() -> Vec<CompletionItem> {
@@ -72,14 +74,14 @@ fn constructors() -> Vec<CompletionItem> {
     for ctx in constructor {
         let item = TypCmpItem {
             label: ctx.1.to_owned(),
-            label_details: "markup",
+            label_details: "markup".to_owned(),
             kind: CompletionItemKind::CONSTRUCTOR,
             documentation: ctx.0.to_owned(),
             insert_text: ctx.2.to_owned(),
         };
         items.push(item);
     }
-    TypCmpItem::get_cmp(items)
+    TypCmpItem::convert(items)
 }
 
 fn get_headers() -> HashMap<String, String> {
@@ -113,7 +115,7 @@ fn header_test() {
     );
 }
 
-fn headers() -> Vec<CompletionItem> {
+fn collect_headers() -> Vec<CompletionItem> {
     let header = get_headers();
     let mut header_items = Vec::new();
     for (key, val) in header {
@@ -139,7 +141,7 @@ fn headers() -> Vec<CompletionItem> {
     header_items
 }
 
-pub fn typ_image_cmp() -> Result<Vec<CompletionItem>, anyhow::Error> {
+pub fn collect_image_cmp() -> Result<Vec<CompletionItem>, Error> {
     let mut items = Vec::new();
     let images = get_images()?;
     typ_logger!("image: {:#?}", images);
@@ -147,7 +149,7 @@ pub fn typ_image_cmp() -> Result<Vec<CompletionItem>, anyhow::Error> {
         let image = item.to_string_lossy().to_string();
         let item = TypCmpItem {
             label: "image".to_owned(),
-            label_details: "markup",
+            label_details: "markup".to_owned(),
             kind: CompletionItemKind::FILE,
             documentation: "Image".to_owned(),
             insert_text: format!("#image(\"{}\", width: 100%)", image),
@@ -155,5 +157,5 @@ pub fn typ_image_cmp() -> Result<Vec<CompletionItem>, anyhow::Error> {
         typ_logger!("image: {}", image);
         items.push(item);
     }
-    Ok(TypCmpItem::get_cmp(items))
+    Ok(TypCmpItem::convert(items))
 }

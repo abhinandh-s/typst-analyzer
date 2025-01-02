@@ -1,1 +1,3 @@
 .direnv
+tests/res
+crates/typst-analyzer-analysis/snippets.yml
