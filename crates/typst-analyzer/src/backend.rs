@@ -286,6 +286,10 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    async fn did_create_files(&self, params: CreateFilesParams) {
+        let _ = params;
+    }
+
     /// Handle did open requests
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let text_document = params.text_document.clone();

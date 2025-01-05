@@ -1,3 +1,6 @@
+use std::collections::hash_map;
+use std::env::current_dir;
+
 use anyhow::{anyhow, Error};
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Url};
 use typst_syntax::SyntaxKind;
@@ -12,6 +15,10 @@ impl Backend {
         let mut diagnostics = Vec::new(); // check_unclosed_delimiters(&doc);
         if let Ok(mut missing_labels) = self.missing_label_error(uri.clone()) {
             diagnostics.append(&mut missing_labels);
+        }
+        // -- TEST:
+        if let Ok(mut missing_path_error) = self.missing_path_error(uri.clone()) {
+            diagnostics.append(&mut missing_path_error);
         }
         if let Ok(mut syntax_err) = self.syntax_error(uri.clone()) {
             diagnostics.append(&mut syntax_err);
@@ -118,6 +125,54 @@ impl Backend {
                     });
                 }
             }
+        }
+        Ok(diagnostic_item)
+    }
+
+    pub fn missing_path_error(&self, uri: Url) -> Result<Vec<Diagnostic>, Error> {
+        let mut imports = String::new();
+        let mut diagnostic_item = Vec::new();
+        let mut imports_map: hash_map::HashMap<String, Symbol> = hash_map::HashMap::new();
+
+        if let Some(ast) = &self.ast_map.get(&uri.to_string()) {
+            let source = ast.value();
+            for node in ast.root().children() {
+                if node.kind() == SyntaxKind::ModuleImport {
+                    // slice out the range of node from ast_map source
+                    if let Some(range) = &source.range(node.span()) {
+                        if let Some(ctx) = source.get(range.to_owned()) {
+                            let loc = range_to_location(uri.clone(), source, range)?;
+                            if let Some((_, rhs)) = ctx.split_once("\"") {
+                                if let Some((lhs, _)) = rhs.rsplit_once("\"") {
+                                    imports.push_str(lhs);
+                                    imports_map.insert(
+                                        lhs.to_owned(),
+                                        Symbol {
+                                            name: imports.clone(),
+                                            location: loc.clone(),
+                                            symbol_type: SyntaxKind::ModuleImport,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            imports_map.into_iter().for_each(|(file, symbol)| {
+                if let Ok(c_dir) = current_dir() {
+                    if !c_dir.join(file.clone()).exists() {
+                        diagnostic_item.push(Diagnostic {
+                            range: symbol.location.range,
+                            severity: Some(DiagnosticSeverity::ERROR),
+                            source: Some("typst-analyzer".to_owned()),
+                            message: format!("file not found \"{}\"", file),
+                            ..Default::default()
+                        });
+                    }
+                }
+            });
         }
         Ok(diagnostic_item)
     }

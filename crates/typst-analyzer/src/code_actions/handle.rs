@@ -130,6 +130,39 @@ impl TypstCodeActions for Backend {
                 }
             }
         }
+        // -- TEST: this will work but the created file is not showing up in file explorer maybe
+        // this might not be the actual method;
+        // if let Ok(uri_two) = Url::parse("file:///home/abhi/docs/just/example_two.typ") {
+        //     let edit_two = TextEdit {
+        //         range: Range {
+        //             start: Position {
+        //                 line: 0,
+        //                 character: 0,
+        //             },
+        //             end: Position {
+        //                 line: 0,
+        //                 character: 0,
+        //             },
+        //         },
+        //         new_text: "Neovim".to_owned(),
+        //     };
+        //     let workspace_edit_two = WorkspaceEdit {
+        //         changes: Some(HashMap::from([(uri_two.clone(), vec![edit_two])])),
+        //         document_changes: None,
+        //         change_annotations: None,
+        //     };
+        //     let code_action_two = CodeAction {
+        //         title: "Create new file".to_owned(),
+        //         kind: Some(CodeActionKind::QUICKFIX),
+        //         diagnostics: None,
+        //         edit: Some(workspace_edit_two),
+        //         command: None,
+        //         is_preferred: Some(true),
+        //         disabled: None,
+        //         data: None,
+        //     };
+        //     actions.push(CodeActionOrCommand::CodeAction(code_action_two));
+        // }
         Ok(actions)
     }
 
