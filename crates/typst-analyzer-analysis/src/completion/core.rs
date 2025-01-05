@@ -76,10 +76,20 @@ impl ToTypCmpItem for Vec<FuncMaker> {
 }
 
 impl TypCmpItem {
-    
-
-    pub fn new(label: String, label_details: String, kind: CompletionItemKind, documentation: String, insert_text: String) -> Self {
-        Self { label, label_details, kind, documentation, insert_text }
+    pub fn new(
+        label: String,
+        label_details: String,
+        kind: CompletionItemKind,
+        documentation: String,
+        insert_text: String,
+    ) -> Self {
+        Self {
+            label,
+            label_details,
+            kind,
+            documentation,
+            insert_text,
+        }
     }
 
     /// Converts a list of `TypCmpItem` into LSP-compatible `CompletionItem`s.

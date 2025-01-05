@@ -109,7 +109,41 @@ impl Backend {}
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     /// Initialize the language server
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        if let Some(folders) = params.workspace_folders {
+            //
+            // typ_logger!("workspace_folders: {:#?}", &root);
+            //
+            // workspace_folders: [
+            //     WorkspaceFolder {
+            //         uri: Url {
+            //             scheme: "file",
+            //             cannot_be_a_base: false,
+            //             username: "",
+            //             password: None,
+            //             host: None,
+            //             port: None,
+            //             path: "/home/abhi/docs/just",
+            //             query: None,
+            //             fragment: None,
+            //         },
+            //         name: "/home/abhi/docs/just",
+            //     },
+            // ]
+            //
+            for dir in folders.into_iter() {
+                let _base_dir = dir.uri.clone().path();
+                // -- FIX: i am adding the uri of folder not files in folder!
+                self.handle_did_change(DidChangeTextDocumentParams {
+                    text_document: VersionedTextDocumentIdentifier {
+                        uri: dir.uri,
+                        version: 0,
+                    },
+                    content_changes: Vec::new(),
+                })
+                .await;
+            }
+        }
         Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {
@@ -351,7 +385,39 @@ impl LanguageServer for Backend {
     }
 
     /// Handle did change workspace folders requests
-    async fn did_change_workspace_folders(&self, _: DidChangeWorkspaceFoldersParams) {
+    ///
+    /// The [`workspace/didChangeWorkspaceFolders`] notification is sent from the client to the
+    /// server to inform about workspace folder configuration changes.
+    ///
+    /// [`workspace/didChangeWorkspaceFolders`]: https://microsoft.github.io/language-server-protocol/specification#workspace_didChangeWorkspaceFolders
+    ///
+    /// The notification is sent by default if both of these boolean fields were set to `true` in
+    /// the [`initialize`](Self::initialize) method:
+    ///
+    /// * `InitializeParams::capabilities::workspace::workspace_folders`
+    /// * `InitializeResult::capabilities::workspace::workspace_folders::supported`
+    ///
+    /// This notification is also sent if the server has registered itself to receive this
+    /// notification.
+    async fn did_change_workspace_folders(&self, params: DidChangeWorkspaceFoldersParams) {
+        // todo:
+        let event = params.event;
+        let added = event.added;
+        typ_logger!("vec of workspace_folder added: {:#?}", added);
+        for folder in added {
+            // The associated URI for this workspace folder.
+            // The name of the workspace folder. Used to refer to this
+            // workspace folder in the user interface.
+            let (_name, _uri) = (folder.name, folder.uri);
+        }
+        let removed = event.removed;
+        typ_logger!("vec of workspace_folder removed: {:#?}", removed);
+        for folder in removed {
+            // The associated URI for this workspace folder.
+            // The name of the workspace folder. Used to refer to this
+            // workspace folder in the user interface.
+            let (_name, _uri) = (folder.name, folder.uri);
+        }
         self.client
             .log_message(MessageType::INFO, "Workspace folders changed!")
             .await;
