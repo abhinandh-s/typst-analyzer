@@ -2,6 +2,24 @@ use std::collections::VecDeque;
 
 use typst_syntax::{LinkedNode, SyntaxKind, SyntaxNode};
 
+use crate::typ_logger;
+
+pub fn print_all_descendants<'a>(node: &'a LinkedNode<'a>) -> Vec<LinkedNode<'a>> {
+    let mut vec = Vec::new();
+    // Get an iterator over the children of the current node
+    let children = node.children(); // Assuming `.children()` returns LinkedChildren
+
+    // Iterate through the immediate children
+    for child in children {
+        typ_logger!("Found child: {:?}", child);
+        vec.push(child.clone());
+
+        // Recursively process each child node
+        print_all_descendants(&child);
+    }
+    vec
+}
+
 /// Walks down the AST from current cursor position and Returns a VecDeque of SyntaxKind.
 /// Must provide markup in vector in all cases since thas is the root.
 pub fn kind_walker(cursor: usize, ast: &SyntaxNode) -> VecDeque<SyntaxKind> {

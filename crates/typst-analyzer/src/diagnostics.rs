@@ -1,9 +1,10 @@
-use std::collections::hash_map;
+use std::collections::{hash_map, VecDeque};
 use std::env::current_dir;
 
 use anyhow::{anyhow, Error};
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Url};
-use typst_syntax::SyntaxKind;
+use typst_analyzer_analysis::node::print_all_descendants;
+use typst_syntax::{LinkedNode, SyntaxKind};
 
 use crate::backend::Backend;
 use crate::symbols::{find_missing_items, range_to_location, range_to_lsp_range, Symbol};
@@ -130,6 +131,21 @@ impl Backend {
     }
 
     pub fn missing_path_error(&self, uri: Url) -> Result<Vec<Diagnostic>, Error> {
+         let uri_one: String = uri.to_string();
+        if let Some(text) = self.ast_map.get(&uri_one) {
+        let s = text.value();
+            let a = s.root();
+            let l = LinkedNode::new(a);
+            //    if let Some(position) = position_to_offset(&text, params.position) {
+        //        if let Some(ast_map_ctx) = self.ast_map.get(&uri) {
+        //            let syntaxnode = &ast_map_ctx.value().text();
+        //            let parsed = typst_syntax::parse(syntaxnode);
+        //            let linked_node: VecDeque<LinkedNode> = node_walker(position, &parsed);
+        //            print_all_descendants(node);
+        //        }
+        //    }
+        }
+
         let mut imports = String::new();
         let mut diagnostic_item = Vec::new();
         let mut imports_map: hash_map::HashMap<String, Symbol> = hash_map::HashMap::new();
