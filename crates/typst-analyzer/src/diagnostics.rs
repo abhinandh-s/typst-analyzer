@@ -1,5 +1,8 @@
 use anyhow::{anyhow, Error};
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Url};
+use tower_lsp::lsp_types::{
+    CodeActionKind, CodeActionOrCommand, Diagnostic, DiagnosticRelatedInformation,
+    DiagnosticSeverity, Url,
+};
 use typst_syntax::SyntaxKind;
 
 use crate::backend::Backend;
@@ -10,8 +13,10 @@ impl Backend {
     pub(crate) fn provide_diagnostics(&self, uri: Url) -> Result<Vec<Diagnostic>, Error> {
         // Check for unclosed delimiters
         let mut diagnostics = Vec::new(); // check_unclosed_delimiters(&doc);
-        if let Ok(mut missing_labels) = self.missing_label_error(uri.clone()) {
-            diagnostics.append(&mut missing_labels);
+        if let Ok(missing_labels) = self.missing_label_error(uri.clone()) {
+            for i in missing_labels {
+                diagnostics.push(i.0);
+            }
         }
         if let Ok(mut syntax_err) = self.syntax_error(uri.clone()) {
             diagnostics.append(&mut syntax_err);
@@ -60,7 +65,10 @@ impl Backend {
         Ok(vec![first.to_owned()])
     }
 
-    pub fn missing_label_error(&self, uri: Url) -> Result<Vec<Diagnostic>, Error> {
+    pub fn missing_label_error(
+        &self,
+        uri: Url,
+    ) -> Result<Vec<(Diagnostic, CodeActionOrCommand)>, Error> {
         let mut diagnostic_item = Vec::new();
         let mut symbol_vec = Vec::new();
         let mut ast_labels = Vec::new();
@@ -109,13 +117,36 @@ impl Backend {
             let missing = find_missing_items(&ast_references, &ast_labels);
             for symbol in &symbol_vec {
                 if missing.contains(&symbol.name.as_str()) {
-                    diagnostic_item.push(Diagnostic {
+                    let diagnostics = Diagnostic {
                         range: symbol.location.range,
                         severity: Some(DiagnosticSeverity::ERROR),
                         source: Some("typst-analyzer".to_owned()),
                         message: "reference is missing label".to_owned(),
                         ..Default::default()
-                    });
+                    };
+                    let edit = tower_lsp::lsp_types::TextEdit {
+                        range: symbol.location.range,
+                        new_text: "Neovim".to_owned(),
+                    };
+
+                    let workspace_edit = tower_lsp::lsp_types::WorkspaceEdit {
+                        changes: Some(std::collections::HashMap::from([(uri.clone(), vec![edit])])),
+                        document_changes: None,
+                        change_annotations: None,
+                    };
+
+                    let code_action = tower_lsp::lsp_types::CodeAction {
+                        title: "Replace 'VS Code' with 'Neovim'".to_owned(),
+                        kind: Some(CodeActionKind::QUICKFIX),
+                        diagnostics: None,
+                        edit: Some(workspace_edit),
+                        command: None,
+                        is_preferred: Some(true),
+                        disabled: None,
+                        data: None,
+                    };
+                    diagnostic_item
+                        .push((diagnostics, CodeActionOrCommand::CodeAction(code_action)));
                 }
             }
         }

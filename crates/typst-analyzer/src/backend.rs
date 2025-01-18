@@ -122,6 +122,7 @@ impl LanguageServer for Backend {
                         code_action_kinds: Some(vec![
                             CodeActionKind::QUICKFIX,
                             CodeActionKind::SOURCE,
+                            CodeActionKind::SOURCE_FIX_ALL,
                         ]),
                         work_done_progress_options: WorkDoneProgressOptions {
                             work_done_progress: Some(true),
@@ -141,7 +142,10 @@ impl LanguageServer for Backend {
                     ..Default::default()
                 }),
                 execute_command_provider: Some(ExecuteCommandOptions {
-                    commands: vec!["dummy.do_something".to_owned()],
+                    commands: vec![
+                        "dummy.do_something".to_owned(),
+                        "add_dummy_bib_entry".to_owned(),
+                    ],
                     work_done_progress_options: Default::default(),
                 }),
                 folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
@@ -265,11 +269,19 @@ impl LanguageServer for Backend {
             let actions =
                 self.generate_code_actions(content, range, params.text_document.uri.clone());
             let ctx_restlt =
-                self.calculate_code_actions_for_bib(content, range, params.text_document.uri);
+                self.calculate_code_actions_for_bib(content, range, params.text_document.uri.clone());
 
             match ctx_restlt {
                 Ok(mut ctx) => match actions {
                     Ok(mut actions) => {
+                        if let Ok(label_dig_re) =
+                             self.missing_label_error(params.text_document.uri.clone())
+                        {
+                            for i in label_dig_re {
+                                actions.push(i.1);
+                            }
+                            // actions.append(&mut label_dig_re);
+                        }
                         actions.append(&mut ctx);
                         if !actions.is_empty() {
                             self.client
@@ -368,7 +380,14 @@ impl LanguageServer for Backend {
     }
 
     /// Handle execute command requests
-    async fn execute_command(&self, _: ExecuteCommandParams) -> Result<Option<Value>> {
+    async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
+        let re = self.execute_custom_command(&params).await;
+        match re {
+            Ok(_) => {}
+            Err(err) => {
+                typ_logger!("error: {}", err);
+            }
+        }
         self.client
             .log_message(MessageType::INFO, "Command executed!")
             .await;

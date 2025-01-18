@@ -1,14 +1,16 @@
 harry:
-    type: Book
-    title: Harry Potter and the Order of the Phoenix
-    author: Rowling, J. K.
-    volume: 5
-    page-total: 768
-    date: 2003-06-21
-
+  type: book
+  title: Harry Potter and the Order of the Phoenix
+  author: Rowling, J. K.
+  date: 2003-06-21
+  volume: 5
+  page-total: 768
 electronic:
-    type: Web
-    title: Ishkur's Guide to Electronic Music
-    serial-number: v2.5
-    author: Ishkur
-    url: http://www.techno.org/electronic-music-guide/
+  type: web
+  title: Ishkur's Guide to Electronic Music
+  author: Ishkur
+  url: http://www.techno.org/electronic-music-guide/
+  serial-number:
+    serial: v2.5
+this-is-by-typst-analyzer:
+  type: reference

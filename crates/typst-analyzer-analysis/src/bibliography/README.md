@@ -537,3 +537,98 @@ page-range: S10-15
 A [Unicode Language Identifier](https://unicode.org/reports/tr35/tr35.html#unicode_language_id) identifies a language or its variants. At the simplest, you can specify an all-lowercase [two-letter ISO 639-1 code](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) like `en` or `es` as a language. It is possible to specify regions, scripts, or variants to more precisely identify a variety of a language, especially in cases where the ISO 639-1 code is considered a "macrolanguage" (`zh` includes both Cantonese and Mandarin). In such cases, specify values like `en-US` for American English or `zh-Hans-CN` for Mandarin written in simplified script in mainland China. The region tags have to be written in all-caps and are mostly corresponding to [ISO 3166-1 alpha_2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#Officially_assigned_code_elements) codes.
 
 Consult the [documentation of the Rust crate unic-langid](https://docs.rs/unic-langid/latest/unic_langid/index.html) we use for parsing these language identifiers for more information.
+
+
+
+```rust
+Entry {
+    key: "crazy-rich",
+    entry_type: Book,
+    title: Some(
+        FormatString {
+            value: ChunkedString(
+                [
+                    StringChunk {
+                        value: "Crazy Rich Asians",
+                        kind: Normal,
+                    },
+                ],
+            ),
+            short: None,
+        },
+    ),
+    authors: Some(
+        [
+            Person {
+                name: "Kwan",
+                given_name: Some(
+                    "Kevin",
+                ),
+                prefix: None,
+                suffix: None,
+                alias: None,
+            },
+        ],
+    ),
+    date: Some(
+        Date {
+            year: 2014,
+            month: None,
+            day: None,
+            approximate: false,
+        },
+    ),
+    editors: None,
+    affiliated: None,
+    publisher: Some(
+        Publisher {
+            name: Some(
+                FormatString {
+                    value: ChunkedString(
+                        [
+                            StringChunk {
+                                value: "Anchor Books",
+                                kind: Normal,
+                            },
+                        ],
+                    ),
+                    short: None,
+                },
+            ),
+            location: None,
+        },
+    ),
+    location: Some(
+        FormatString {
+            value: ChunkedString(
+                [
+                    StringChunk {
+                        value: "New York, NY, US",
+                        kind: Normal,
+                    },
+                ],
+            ),
+            short: None,
+        },
+    ),
+    organization: None,
+    issue: None,
+    volume: None,
+    volume_total: None,
+    edition: None,
+    page_range: None,
+    page_total: None,
+    time_range: None,
+    runtime: None,
+    url: None,
+    serial_number: None,
+    language: None,
+    archive: None,
+    archive_location: None,
+    call_number: None,
+    note: None,
+    abstract_: None,
+    genre: None,
+    parents: [],
+}
+```

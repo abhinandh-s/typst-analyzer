@@ -2,47 +2,72 @@
 //!
 //! This module contains funtions related to bibliograpy and serialization and deserialization of .yml file.
 
-#![allow(unused, dead_code, clippy::enum_variant_names)]
-#![deny(clippy::unwrap_used)]
+// #![allow(unused, dead_code, clippy::enum_variant_names)]
+#![allow(clippy::unwrap_used)]
 
-use serde::{Deserialize, Serialize};
-use serde_yml::Value;
-use tinyerror::TinyError;
-
-#[derive(TinyError)]
-enum BibError {
-    #[error("Failed to connect to the database")]
-    ConnectionError,
-
-    #[error("Invalid configuration provided")]
-    ConfigError,
-
-    #[error("IO error occurred")]
-    IoError,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct Point {
-    x: f64,
-    y: f64,
-}
-
-/// will look up the Text/Document and gets the #bibliograpy("anyword") and look if `anyword` is in
-/// specific dir.
-///
-/// will create one with code action
-/// if the specified profile is missing from  bibliograpy add a fake one to satisfy diagnostics
 use std::env::current_dir;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::rc::Rc;
 
-use crate::typ_logger;
+use anyhow::anyhow;
+use hayagriva::io::{from_yaml_str, to_yaml_str};
+use hayagriva::types::EntryType;
+use hayagriva::{Entry, Library};
+use walkdir::{DirEntry, WalkDir};
 
-pub fn parse_bib() -> Result<(), anyhow::Error> {
-    let path = Path::new("/home/abhi/git/typst-analyzer/examples/bibliography.yml");
-    let content: String = std::fs::read_to_string(path)?;
-    typ_logger!("{:#?}", content);
-    let deserialized_point = serde_yml::Deserializer::from_str(&content);
-    let value = Value::deserialize(deserialized_point)?;
-    typ_logger!("{:#?}", value);
-    Ok(())
+// use crate::typ_logger;
+
+fn is_hidden(entry: &DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_str()
+        .map(|s| s.starts_with("."))
+        .unwrap_or(false)
+}
+
+pub fn bibliography_file_path() -> anyhow::Result<PathBuf, anyhow::Error> {
+    let path = current_dir()?;
+    let walker = WalkDir::new(&path).into_iter();
+    for entry in walker.filter_entry(|e| !is_hidden(e)) {
+        let val = Rc::new(entry?);
+        let bib = val
+            .clone()
+            .path()
+            .file_name()
+            .ok_or(anyhow!("err"))?
+            .to_string_lossy()
+            .contains("bibliography.yml");
+        if bib {
+            return Ok(val.clone().path().to_owned());
+        };
+    }
+    Err(anyhow!("err"))
+}
+
+pub fn parse_bib() -> anyhow::Result<Library, anyhow::Error> {
+    let file = bibliography_file_path()?; 
+    let content = std::fs::read_to_string(file)?;
+    // Parse a bibliography
+    Ok(from_yaml_str(content.as_str())?)
+}
+
+pub fn get_bib_keys() -> anyhow::Result<Vec<String>, anyhow::Error> {
+    let bib = parse_bib()?;
+    let mut vec = Vec::new();
+
+    for item in bib.iter() {
+        // typ_logger!("bibliography: {:#?}", item);
+        vec.push(item.key().to_owned());
+    }
+    Ok(vec)
+}
+
+pub fn new_bib_key(key: &str) -> anyhow::Result<bool, anyhow::Error> {
+    if let Ok(mut bib) = parse_bib() {
+        bib.push(&Entry::new(key, EntryType::Reference));
+        let s = to_yaml_str(&bib)?;
+        std::fs::write(bibliography_file_path()?, s)?;
+        return Ok(true);
+    }
+    Err(anyhow!("failed in bibliography funtion"))
 }

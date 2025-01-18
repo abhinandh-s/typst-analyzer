@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use anyhow::Error;
 use regex::Regex;
 use tower_lsp::lsp_types::*;
+use typst_analyzer_analysis::bibliography::{get_bib_keys, new_bib_key};
 use typst_analyzer_analysis::dict::*;
 
 use crate::backend::Backend;
+use crate::typ_logger;
 
 pub(crate) trait TypstCodeActions {
     fn get_table_parameters(&self) -> HashMap<String, String>;
@@ -117,7 +119,22 @@ impl TypstCodeActions for Backend {
                     let code_action = CodeAction {
                         title: "Replace 'VS Code' with 'Neovim'".to_owned(),
                         kind: Some(CodeActionKind::QUICKFIX),
-                        diagnostics: None,
+                        diagnostics: Some(vec![Diagnostic {
+                            range: Range {
+                                start: Position {
+                                    line: line_idx as u32,
+                                    character: start as u32,
+                                },
+                                end: Position {
+                                    line: line_idx as u32,
+                                    character: end as u32,
+                                },
+                            },
+                            severity: Some(DiagnosticSeverity::ERROR),
+                            source: Some("typst-analyzer".to_owned()),
+                            message: "reference is missing label".to_owned(),
+                            ..Default::default()
+                        }]),
                         edit: Some(workspace_edit),
                         command: None,
                         is_preferred: Some(true),
@@ -139,7 +156,6 @@ impl TypstCodeActions for Backend {
         range: Range,
         uri: Url,
     ) -> Result<Vec<CodeActionOrCommand>, Error> {
-        typst_analyzer_analysis::bibliography::parse_bib()?;
         let mut actions = Vec::new();
         let mut multiline_table = String::new();
         let mut in_table_block = false;
@@ -229,74 +245,17 @@ impl TypstCodeActions for Backend {
 
     fn calculate_code_actions_for_bib(
         &self,
-        content: &str,
-        range: Range,
-        uri: Url,
+        _content: &str,
+        _range: Range,
+        _uri: Url,
     ) -> Result<Vec<CodeActionOrCommand>, Error> {
         let mut actions = Vec::new();
-
-        // Check if the text "VS Code" is within the range
-        let bib_re = Regex::new(r#"([^"]*)"#)?;
-
-        for (line_idx, line) in content.lines().enumerate() {
-            if let Some(vs_code_match) = bib_re.find(line) {
-                let start = vs_code_match.start();
-                let end = vs_code_match.end();
-
-                // Ensure the match is within the specified range
-                if line_idx == range.start.line as usize && line_idx == range.end.line as usize {
-                    let edit = TextEdit {
-                        range: Range {
-                            start: Position {
-                                line: line_idx as u32,
-                                character: start as u32,
-                            },
-                            end: Position {
-                                line: line_idx as u32,
-                                character: end as u32,
-                            },
-                        },
-                        new_text: "".to_owned(),
-                    };
-
-                    let workspace_edit = WorkspaceEdit {
-                        changes: Some(HashMap::from([(uri.clone(), vec![edit])])),
-                        document_changes: None,
-                        change_annotations: None,
-                    };
-
-                    let code_action = CodeAction {
-                        title: "File not found, Create one".to_owned(),
-                        kind: Some(CodeActionKind::QUICKFIX),
-                        diagnostics: Some(vec![Diagnostic {
-                            range: Range {
-                                start: Position {
-                                    line: line_idx as u32,
-                                    character: start as u32,
-                                },
-                                end: Position {
-                                    line: line_idx as u32,
-                                    character: end as u32,
-                                },
-                            },
-                            severity: Some(DiagnosticSeverity::ERROR),
-                            source: Some("File not found, Create one".to_owned()),
-                            message: "File not found, Create one".to_owned(),
-                            ..Default::default()
-                        }]),
-                        edit: Some(workspace_edit),
-                        command: None,
-                        is_preferred: Some(true),
-                        disabled: None,
-                        data: None,
-                    };
-
-                    // Wrap CodeAction in CodeActionOrCommand
-                    actions.push(CodeActionOrCommand::CodeAction(code_action));
-                }
-            }
-        }
-
+        let _keys = get_bib_keys()?;
+        actions.push(CodeActionOrCommand::Command(Command {
+            title: "add a dummy bibliography entry for this item".to_owned(),
+            command: "add_dummy_bib_entry".to_owned(),
+            arguments: None,
+        }));
         Ok(actions)
     }
 }
@@ -312,9 +271,19 @@ impl Backend {
     }
 
     // Handle the execution of the custom command
-    pub async fn execute_custom_command(&self, params: ExecuteCommandParams) -> Result<(), Error> {
-        if params.command == "customCommand" {
-            println!("Running custom function...");
+    pub async fn execute_custom_command(&self, params: &ExecuteCommandParams) -> Result<(), Error> {
+        match params.command.as_str() {
+            "this" => typ_logger!("this"),
+            "add_dummy_bib_entry" => {
+                if let Ok(true) = new_bib_key("this-is-by-typst-analyzer") {
+                    typ_logger!("this is from add_dummy_bib_entry");
+                }
+                typ_logger!("this is from add_dummy_bib_entry");
+            }
+            _ => typ_logger!("none"),
+        }
+        if params.command == "add_dummy_bib_entry" {
+            typ_logger!("Running add_dummy_bib_entry function...");
             // Replace this with actual custom logic, e.g., custom function call
         }
         Ok(())
