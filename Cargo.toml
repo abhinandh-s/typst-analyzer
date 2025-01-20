@@ -33,7 +33,7 @@ typst-syntax = "0.12.0"
 typst-analyzer-analysis = { path = "./crates/typst-analyzer-analysis", version = "0.1.10" }
 typstyle-core = "0.12.14"
 tower-lsp = "0.20.0"
-thiserror = "2.0.9"
+thiserror = "2.0.11"
 tokio = { version = "1.42.0", features = ["full"] }
 tracing-subscriber = "0.3.19"
 walkdir = "2.5.0"
