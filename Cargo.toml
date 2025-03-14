@@ -34,7 +34,7 @@ typst-analyzer-analysis = { path = "./crates/typst-analyzer-analysis", version =
 typstyle-core = "0.12.14"
 tower-lsp = "0.20.0"
 thiserror = "2.0.9"
-tokio = { version = "1.42.0", features = ["full"] }
+tokio = { version = "1.44.1", features = ["full"] }
 tracing-subscriber = "0.3.19"
 walkdir = "2.5.0"
 
