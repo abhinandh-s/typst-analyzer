@@ -31,7 +31,7 @@ regex = "1.11.1"
 ropey = "1.6.1"
 typst-syntax = "0.12.0"
 typst-analyzer-analysis = { path = "./crates/typst-analyzer-analysis", version = "0.1.10" }
-typstyle-core = "0.12.14"
+typstyle-core = "0.12.15"
 tower-lsp = "0.20.0"
 thiserror = "2.0.9"
 tokio = { version = "1.44.1", features = ["full"] }
