@@ -21,7 +21,7 @@ dashmap = "6.1.0"
 dirs = "6.0.0"
 ecow = "0.2.3"
 fontdb = "0.23.0"
-hayagriva = "0.8.0"
+hayagriva = "0.8.1"
 itertools = "0.14.0"
 oxc_index = "2.0.0"
 serde = { version = "1.0.217", features = ["derive"] }
