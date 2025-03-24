@@ -15,7 +15,7 @@ members = [
  ]
 
 [workspace.dependencies]
-anyhow = "1.0.95"
+anyhow = "1.0.97"
 chrono = "0.4.40"
 dashmap = "6.1.0"
 dirs = "6.0.0"
